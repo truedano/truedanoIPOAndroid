@@ -1,0 +1,6 @@
+{
+  "name": "台股IPO競拍決策",
+  "description": "基於TWSE真實法人開標數據與台股6檔升降單位對齊的IPO競拍蜜月行情量化預判決策引擎",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
