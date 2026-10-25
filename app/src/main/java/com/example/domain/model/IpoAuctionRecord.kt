@@ -19,7 +19,8 @@ data class IpoAuctionRecord(
     val note: String = "",
     val isPreset: Boolean = false,
     val listingDate: String? = null,
-    val analysisDate: String = "2026-10-24"
+    val lotteryDate: String? = null,
+    val analysisDate: String = "2026-10-26"
 ) {
     /**
      * 計算合格投標倍數（合格投標量 / 競拍釋出總量）
@@ -51,19 +52,38 @@ data class IpoAuctionRecord(
     /**
      * 判斷是否為進行中／未過期標案
      * 規則：
-     * 1. 內建教學案例 (isPreset) 一律視為有效
-     * 2. 有掛牌日：掛牌日尚未過去（或在掛牌 7 天蜜月期內）
-     * 3. 無掛牌日：開標日在 30 天以內
+     * 1. 有掛牌日：掛牌日尚未過去（或在掛牌 7 天蜜月期內）
+     * 2. 有抽籤日：抽籤日尚未過去（或抽籤後 10 天內等待掛牌）
+     * 3. 無掛牌與抽籤日：開標日在 30 天以內
      */
     fun isActive(today: LocalDate = LocalDate.now()): Boolean {
-        if (isPreset) return true
+        if (listingDate != null && listingDate.isNotBlank()) {
+            val parsedListing = parseDateSafe(listingDate)
+            if (parsedListing != null) {
+                return !today.isAfter(parsedListing.plusDays(7))
+            }
+        }
 
-        val dateToCompare = listingDate?.takeIf { it.isNotBlank() } ?: auctionDate
-        val parsed = parseDateSafe(dateToCompare) ?: return true
+        if (lotteryDate != null && lotteryDate.isNotBlank()) {
+            val parsedLottery = parseDateSafe(lotteryDate)
+            if (parsedLottery != null) {
+                return !today.isAfter(parsedLottery.plusDays(10))
+            }
+        }
 
-        val expirationDate = if (listingDate != null) parsed.plusDays(7) else parsed.plusDays(30)
-        return !today.isAfter(expirationDate)
+        val parsedAuction = parseDateSafe(auctionDate) ?: return true
+        return !today.isAfter(parsedAuction.plusDays(30))
     }
+
+    /**
+     * 取得進行中時程標記文字（供 Chips 快速顯示）
+     */
+    val timingBadge: String
+        get() = when {
+            lotteryDate != null && lotteryDate.isNotBlank() -> "$lotteryDate 抽籤"
+            listingDate != null && listingDate.isNotBlank() -> "$listingDate 掛牌"
+            else -> "$auctionDate 開標"
+        }
 
     private fun parseDateSafe(str: String): LocalDate? {
         return try {

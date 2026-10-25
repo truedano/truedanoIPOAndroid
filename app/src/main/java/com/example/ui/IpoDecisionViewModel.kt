@@ -3,7 +3,6 @@ package com.example.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.data.local.PresetCases
 import com.example.domain.calculator.IpoDecisionEngine
 import com.example.domain.model.IpoAuctionRecord
 import com.example.domain.model.IpoDecisionResult
@@ -15,21 +14,20 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class IpoUiState(
-    val searchQuery: String = "6898",
-    val currentRecord: IpoAuctionRecord = PresetCases.ALL_PRESETS.first(),
-    val decisionResult: IpoDecisionResult = IpoDecisionEngine.evaluate(PresetCases.ALL_PRESETS.first()),
-    val allRecords: List<IpoAuctionRecord> = PresetCases.ALL_PRESETS,
+    val searchQuery: String = "",
+    val currentRecord: IpoAuctionRecord? = null,
+    val decisionResult: IpoDecisionResult? = null,
+    val allRecords: List<IpoAuctionRecord> = emptyList(),
     val selectedLots: Int = 1,
     val selectedFeeDiscount: Double = 1.0, // 1.0 原價, 0.6 6折, 0.28 2.8折
     val isSearching: Boolean = false,
-    val userMessage: String? = null,
-    val showActiveOnly: Boolean = true // 預設只顯示進行中 / 未過期標案
+    val userMessage: String? = null
 ) {
     /**
-     * 依據使用者選擇過濾顯示的紀錄
+     * 嚴格只回傳進行中／未過期（抽籤或掛牌蜜月期尚未結束）的 IPO 標案
      */
     val displayRecords: List<IpoAuctionRecord>
-        get() = if (showActiveOnly) allRecords.filter { it.isActive() } else allRecords
+        get() = allRecords.filter { it.isActive() }
 }
 
 class IpoDecisionViewModel(
@@ -40,17 +38,58 @@ class IpoDecisionViewModel(
     val uiState: StateFlow<IpoUiState> = _uiState.asStateFlow()
 
     init {
-        loadInitialData()
+        observeLocalData()
+        syncTwseData()
     }
 
-    private fun loadInitialData() {
+    private fun observeLocalData() {
         viewModelScope.launch {
-            repository.seedPresetRecordsIfEmpty()
             repository.getAllRecords().collect { records ->
-                if (records.isNotEmpty()) {
+                val activeList = records.filter { it.isActive() }
+                if (activeList.isNotEmpty()) {
                     val current = _uiState.value.currentRecord
-                    val matching = records.find { it.stockCode == current.stockCode } ?: records.first()
-                    updateCurrentRecordInternal(matching, records)
+                    val matching = activeList.find { it.stockCode == current?.stockCode } ?: activeList.first()
+                    updateCurrentRecordInternal(matching, activeList)
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            allRecords = emptyList(),
+                            currentRecord = null,
+                            decisionResult = null
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 連線證券交易所同步最新競拍開標與抽籤時程公告
+     */
+    fun syncTwseData() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSearching = true) }
+            val result = repository.fetchTwseAuctions(startDate = "20250101", endDate = "20261231")
+            result.onSuccess { activeList ->
+                _uiState.update {
+                    it.copy(
+                        isSearching = false,
+                        userMessage = if (activeList.isNotEmpty()) {
+                            "已成功同步證交所最新 ${activeList.size} 筆進行中初上市櫃（IPO）標案！"
+                        } else {
+                            "已同步完成，目前無進行中之 IPO 競拍標案"
+                        }
+                    )
+                }
+                if (activeList.isNotEmpty() && _uiState.value.currentRecord == null) {
+                    selectRecord(activeList.first())
+                }
+            }.onFailure { e ->
+                _uiState.update {
+                    it.copy(
+                        isSearching = false,
+                        userMessage = "連線證交所同步失敗：${e.message}"
+                    )
                 }
             }
         }
@@ -60,58 +99,50 @@ class IpoDecisionViewModel(
         _uiState.update { it.copy(searchQuery = query) }
     }
 
-    fun toggleActiveFilter(activeOnly: Boolean) {
-        _uiState.update { it.copy(showActiveOnly = activeOnly) }
-    }
-
     fun performSearch() {
         val query = _uiState.value.searchQuery.trim()
         if (query.isEmpty()) return
 
-        // 1. 先從本地資料庫或經典預設查詢
-        val localMatch = _uiState.value.allRecords.find {
+        // 1. 先從進行中清單查詢
+        val activeRecords = _uiState.value.displayRecords
+        val localMatch = activeRecords.find {
             it.stockCode.equals(query, ignoreCase = true) || it.stockName.contains(query, ignoreCase = true)
         }
 
         if (localMatch != null) {
-            updateCurrentRecordInternal(localMatch, _uiState.value.allRecords)
-            _uiState.update { it.copy(userMessage = "已載入 ${localMatch.stockCode} ${localMatch.stockName}") }
+            selectRecord(localMatch)
             return
         }
 
         // 2. 本地查無，連線 TWSE 官方 API 檢索
         viewModelScope.launch {
-            _uiState.update { it.copy(isSearching = true, userMessage = "正在連線臺灣證交所 API 檢索 $query...") }
+            _uiState.update { it.copy(isSearching = true) }
             val result = repository.fetchTwseAuctions(startDate = "20240101", endDate = "20261231")
             result.onSuccess { fetched ->
-                val apiMatch = fetched.find {
+                val match = fetched.find {
                     it.stockCode.equals(query, ignoreCase = true) || it.stockName.contains(query, ignoreCase = true)
                 }
-
-                if (apiMatch != null) {
-                    // 智慧存入：僅將使用者真正搜尋命中的標案加入本地歷史
-                    repository.insertOrUpdate(apiMatch)
-                    val updatedList = _uiState.value.allRecords + apiMatch
-                    updateCurrentRecordInternal(apiMatch, updatedList)
+                if (match != null) {
+                    selectRecord(match)
                     _uiState.update {
                         it.copy(
                             isSearching = false,
-                            userMessage = "成功獲取 ${apiMatch.stockCode} ${apiMatch.stockName} 開標數據並加入歷史"
+                            userMessage = "已從證交所公告取得 [${match.stockCode} ${match.stockName}] IPO 案！"
                         )
                     }
                 } else {
                     _uiState.update {
                         it.copy(
                             isSearching = false,
-                            userMessage = "查無代號「$query」之競拍開標紀錄（請確認是否為 4 碼普通股或是否已完成開標）"
+                            userMessage = "證交所目前查無 [$query] 之初上市櫃競拍開標紀錄（請確認代號）"
                         )
                     }
                 }
-            }.onFailure { err ->
+            }.onFailure {
                 _uiState.update {
                     it.copy(
                         isSearching = false,
-                        userMessage = "TWSE 連線逾時（${err.localizedMessage ?: "網路問題"}），已切換至離線資料"
+                        userMessage = "連線查詢失敗，請檢查網路連線"
                     )
                 }
             }
@@ -119,50 +150,61 @@ class IpoDecisionViewModel(
     }
 
     fun selectRecord(record: IpoAuctionRecord) {
-        _uiState.update { it.copy(searchQuery = record.stockCode) }
-        updateCurrentRecordInternal(record, _uiState.value.allRecords)
-    }
-
-    fun setLots(lots: Int) {
-        val validLots = lots.coerceIn(1, 100)
-        _uiState.update { current ->
-            val updatedResult = IpoDecisionEngine.evaluate(
-                record = current.currentRecord,
-                lots = validLots,
-                feeDiscount = current.selectedFeeDiscount
+        _uiState.update {
+            it.copy(
+                currentRecord = record,
+                searchQuery = record.stockCode,
+                decisionResult = IpoDecisionEngine.evaluate(
+                    record = record,
+                    lots = it.selectedLots,
+                    feeDiscount = it.selectedFeeDiscount
+                ),
+                userMessage = null
             )
-            current.copy(selectedLots = validLots, decisionResult = updatedResult)
         }
     }
 
-    fun setFeeDiscount(discount: Double) {
-        _uiState.update { current ->
-            val updatedResult = IpoDecisionEngine.evaluate(
-                record = current.currentRecord,
-                lots = current.selectedLots,
-                feeDiscount = discount
+    fun updateSelectedLots(lots: Int) {
+        val safeLots = lots.coerceAtLeast(1)
+        val current = _uiState.value.currentRecord ?: return
+        _uiState.update {
+            it.copy(
+                selectedLots = safeLots,
+                decisionResult = IpoDecisionEngine.evaluate(
+                    record = current,
+                    lots = safeLots,
+                    feeDiscount = it.selectedFeeDiscount
+                )
             )
-            current.copy(selectedFeeDiscount = discount, decisionResult = updatedResult)
         }
     }
 
-    fun deleteRecord(record: IpoAuctionRecord) {
-        viewModelScope.launch {
-            repository.deleteRecord(record.stockCode)
-            val updated = _uiState.value.allRecords.filter { it.stockCode != record.stockCode }
-            _uiState.update { current ->
-                val fallback = if (current.currentRecord.stockCode == record.stockCode) {
-                    updated.firstOrNull() ?: PresetCases.ALL_PRESETS.first()
-                } else current.currentRecord
-                current.copy(allRecords = updated, currentRecord = fallback)
-            }
+    fun updateFeeDiscount(discount: Double) {
+        val current = _uiState.value.currentRecord ?: return
+        _uiState.update {
+            it.copy(
+                selectedFeeDiscount = discount,
+                decisionResult = IpoDecisionEngine.evaluate(
+                    record = current,
+                    lots = it.selectedLots,
+                    feeDiscount = discount
+                )
+            )
         }
     }
 
-    fun clearAllHistory() {
-        viewModelScope.launch {
-            repository.clearAllRecords()
-            _uiState.update { it.copy(allRecords = emptyList(), userMessage = "已清空所有本地歷史紀錄") }
+    fun updateEmergingPrice(price: Double?) {
+        val current = _uiState.value.currentRecord ?: return
+        val updated = current.copy(emergingMarketPrice = price)
+        _uiState.update {
+            it.copy(
+                currentRecord = updated,
+                decisionResult = IpoDecisionEngine.evaluate(
+                    record = updated,
+                    lots = it.selectedLots,
+                    feeDiscount = it.selectedFeeDiscount
+                )
+            )
         }
     }
 
@@ -171,16 +213,16 @@ class IpoDecisionViewModel(
     }
 
     private fun updateCurrentRecordInternal(record: IpoAuctionRecord, all: List<IpoAuctionRecord>) {
-        val calculated = IpoDecisionEngine.evaluate(
-            record = record,
-            lots = _uiState.value.selectedLots,
-            feeDiscount = _uiState.value.selectedFeeDiscount
-        )
         _uiState.update {
             it.copy(
                 currentRecord = record,
-                decisionResult = calculated,
-                allRecords = if (all.isNotEmpty()) all else it.allRecords
+                allRecords = all,
+                searchQuery = record.stockCode,
+                decisionResult = IpoDecisionEngine.evaluate(
+                    record = record,
+                    lots = it.selectedLots,
+                    feeDiscount = it.selectedFeeDiscount
+                )
             )
         }
     }

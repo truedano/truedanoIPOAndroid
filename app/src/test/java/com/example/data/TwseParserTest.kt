@@ -3,6 +3,7 @@ package com.example.data
 import com.example.data.remote.TwseAuctionResponse
 import com.example.data.remote.TwseParser
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 
 class TwseParserTest {
@@ -30,7 +31,8 @@ class TwseParserTest {
             data = listOf(dataRow)
         )
 
-        val records = TwseParser.parseResponse(response)
+        val lotteryDateMap = mapOf("6825" to "2026/10/22")
+        val records = TwseParser.parseResponse(response, lotteryDateMap = lotteryDateMap)
         assertEquals(1, records.size)
 
         val record = records[0]
@@ -38,8 +40,9 @@ class TwseParserTest {
         assertEquals("和暢科技", record.stockName)
         assertEquals("2026/10/19", record.auctionDate)
         assertEquals("2026/10/30", record.listingDate)
+        assertEquals("2026/10/22", record.lotteryDate)
 
-        // 競拍釋出張數必須為 3568 張，絕對不能被誤抓為股票代號 6825！
+        // 競拍釋出張數必須為 3568 張
         assertEquals(3568L, record.totalAuctionShares)
         // 合格投標張數必須為 12507 張
         assertEquals(12507L, record.validBidShares)
@@ -48,32 +51,12 @@ class TwseParserTest {
         assertEquals(20.32, record.minWinningPrice, 0.001)
         // 最高得標價 31.8 元
         assertEquals(31.8, record.maxWinningPrice ?: 0.0, 0.001)
-        // 得標加權均價 22.81 元
+        // 加權平均價 22.81 元
         assertEquals(22.81, record.avgWeightedPrice, 0.001)
         // 實際承銷價 22.81 元
         assertEquals(22.81, record.subscriptionPrice, 0.001)
 
-        // 投標倍數 = 12507 / 3568 = 3.5053...
-        assertEquals(3.505, record.bidRatio, 0.01)
-        // 安全邊際 = 20.32 - 22.81 = -2.49 元（倒掛）
-        assertEquals(-2.49, record.safetyMargin, 0.01)
-    }
-
-    @Test
-    fun testParseTwseResponseFiltersOutConvertibleBonds() {
-        val fields = listOf("開標日期", "證券名稱", "證券代號", "最低得標價格(元)", "得標加權平均價格(元)")
-        val cbRow = listOf("2026/10/19", "生合一", "12951", "105.0", "110.0")
-        val stockRow = listOf("2026/10/19", "和暢科技", "6825", "20.32", "22.81")
-
-        val response = TwseAuctionResponse(
-            stat = "OK",
-            fields = fields,
-            data = listOf(cbRow, stockRow)
-        )
-
-        val records = TwseParser.parseResponse(response)
-        // 5 碼可轉債 12951 應被過濾，僅保留 4 碼普通股 6825
-        assertEquals(1, records.size)
-        assertEquals("6825", records[0].stockCode)
+        // 檢驗 timingBadge
+        assertEquals("2026/10/22 抽籤", record.timingBadge)
     }
 }

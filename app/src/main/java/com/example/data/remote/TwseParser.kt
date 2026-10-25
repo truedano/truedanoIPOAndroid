@@ -7,35 +7,14 @@ object TwseParser {
     /**
      * 解析 TWSE 競價拍賣日程表與開標公告資料
      *
-     * 對應台灣證券交易所 API 欄位 (26 欄標準格式)：
-     * [0] 序號
-     * [1] 開標日期
-     * [2] 證券名稱
-     * [3] 證券代號
-     * [4] 發行市場
-     * [5] 發行性質
-     * [6] 競拍方式
-     * [7] 投標開始日
-     * [8] 投標結束日
-     * [9] 競拍數量(張) / 競拍數量
-     * [10] 最低投標價格(元)
-     * [11] 最低每標單投標數量(張)
-     * [12] 最高投(得)標數量(張)
-     * [13] 保證金成數(%)
-     * [14] 每一投標單投標處理費(元)
-     * [15] 撥券日期(上市、上櫃日期)
-     * [16] 主辦券商
-     * [17] 得標總金額(元)
-     * [18] 得標手續費率(%)
-     * [19] 總合格件
-     * [20] 合格投標數量(張) / 合格投標數量
-     * [21] 最低得標價格(元)
-     * [22] 最高得標價格(元)
-     * [23] 得標加權平均價格(元)
-     * [24] 實際承銷價格(元) / 公開申購承銷價格
-     * [25] 取消競價拍賣(流標或取消)
+     * @param lotteryDateMap 來自 publicForm 的股票抽籤日對照表 (股票代號 -> 抽籤日)
+     * @param subPriceMap 來自 publicForm 的股票公開承銷價對照表 (股票代號 -> 承銷價)
      */
-    fun parseResponse(response: TwseAuctionResponse): List<IpoAuctionRecord> {
+    fun parseResponse(
+        response: TwseAuctionResponse,
+        lotteryDateMap: Map<String, String> = emptyMap(),
+        subPriceMap: Map<String, Double> = emptyMap()
+    ): List<IpoAuctionRecord> {
         val rows = response.data ?: return emptyList()
         val fields = response.fields ?: emptyList()
 
@@ -49,7 +28,7 @@ object TwseParser {
             clean.contains("撥券日期") || clean.contains("上市日期") || clean.contains("上櫃日期")
         }.takeIf { it >= 0 } ?: 15
 
-        // 競拍釋出張數：必須精準匹配「競拍數量」或「競價拍賣數量」，嚴禁匹配「取消競價拍賣」或「最高投(得)標數量」
+        // 競拍釋出張數
         val totalSharesIdx = fields.indexOfFirst {
             val clean = it.replace(" ", "")
             (clean.contains("競拍數量") || clean.contains("競價拍賣數量")) && !clean.contains("取消") && !clean.contains("每標單") && !clean.contains("最高")
@@ -61,7 +40,7 @@ object TwseParser {
             clean.contains("合格投標數量") || (clean.contains("合格") && clean.contains("數量"))
         }.takeIf { it >= 0 } ?: 20
 
-        // 最低得標價格 (元)：嚴禁匹配「最低投標價格」
+        // 最低得標價格 (元)：
         val minPriceIdx = fields.indexOfFirst {
             val clean = it.replace(" ", "")
             clean.contains("最低得標價格") || clean.contains("最低得標價")
@@ -105,7 +84,12 @@ object TwseParser {
                 val minPrice = parseDoubleSafe(row.getOrNull(minPriceIdx))
                 val maxPrice = parseDoubleOrNull(row.getOrNull(maxPriceIdx))
                 val avgPrice = parseDoubleSafe(row.getOrNull(avgPriceIdx))
-                val subPrice = parseDoubleSafe(row.getOrNull(subPriceIdx))
+                var subPrice = parseDoubleSafe(row.getOrNull(subPriceIdx))
+
+                // 若競拍表中的承銷價為 0，嘗試由公開申購表補齊
+                if (subPrice <= 0.0 && subPriceMap.containsKey(rawCode)) {
+                    subPrice = subPriceMap[rawCode] ?: 0.0
+                }
 
                 // 若尚未開標（得標金額與價格均為 0），略過未開標項目
                 if (minPrice <= 0.0 && avgPrice <= 0.0) continue
@@ -114,6 +98,7 @@ object TwseParser {
 
                 val rawListingDate = row.getOrNull(listingDateIdx)?.trim().orEmpty()
                 val formattedListingDate = if (rawListingDate.isNotBlank()) normalizeTwseDate(rawListingDate) else null
+                val matchedLotteryDate = lotteryDateMap[rawCode]
 
                 records.add(
                     IpoAuctionRecord(
@@ -129,7 +114,8 @@ object TwseParser {
                         emergingMarketPrice = null,
                         note = "臺灣證交所官方開標紀錄",
                         isPreset = false,
-                        listingDate = formattedListingDate
+                        listingDate = formattedListingDate,
+                        lotteryDate = matchedLotteryDate
                     )
                 )
             } catch (_: Exception) {
@@ -179,25 +165,28 @@ object TwseParser {
         val clean = dateStr.trim().replace("-", "/")
         val parts = clean.split("/")
         if (parts.size == 3) {
-            val year = parts[0].toIntOrNull() ?: return dateStr
-            val normalizedYear = if (year < 1911) year + 1911 else year
-            val month = parts[1].padStart(2, '0')
-            val day = parts[2].padStart(2, '0')
-            return "$normalizedYear/$month/$day"
+            val yearPart = parts[0].trim()
+            val y = yearPart.toIntOrNull() ?: return clean
+            val fullYear = if (y < 1911) y + 1911 else y
+            val m = parts[1].trim().padStart(2, '0')
+            val d = parts[2].trim().padStart(2, '0')
+            return "$fullYear/$m/$d"
         }
-        if (clean.length == 8 && clean.all { it.isDigit() }) {
-            val y = clean.substring(0, 4)
-            val m = clean.substring(4, 6)
-            val d = clean.substring(6, 8)
+
+        val digits = clean.filter { it.isDigit() }
+        if (digits.length == 7) {
+            val rocYear = digits.substring(0, 3).toIntOrNull() ?: return dateStr
+            val fullYear = rocYear + 1911
+            val m = digits.substring(3, 5)
+            val d = digits.substring(5, 7)
+            return "$fullYear/$m/$d"
+        } else if (digits.length == 8) {
+            val y = digits.substring(0, 4)
+            val m = digits.substring(4, 6)
+            val d = digits.substring(6, 8)
             return "$y/$m/$d"
         }
-        if (clean.length == 7 && clean.all { it.isDigit() }) {
-            val rocYear = clean.substring(0, 3).toIntOrNull() ?: return dateStr
-            val y = rocYear + 1911
-            val m = clean.substring(3, 5)
-            val d = clean.substring(5, 7)
-            return "$y/$m/$d"
-        }
+
         return dateStr
     }
 }

@@ -20,7 +20,8 @@ data class IpoAuctionEntity(
     val note: String,
     val isPreset: Boolean,
     val listingDate: String? = null,
-    val analysisDate: String = "2026-10-24",
+    val lotteryDate: String? = null,
+    val analysisDate: String = "2026-10-26",
     val lastUpdated: Long = System.currentTimeMillis()
 ) {
     fun toDomain(): IpoAuctionRecord {
@@ -38,6 +39,7 @@ data class IpoAuctionEntity(
             note = note,
             isPreset = isPreset,
             listingDate = listingDate,
+            lotteryDate = lotteryDate,
             analysisDate = analysisDate
         )
     }
@@ -58,6 +60,7 @@ data class IpoAuctionEntity(
                 note = record.note,
                 isPreset = record.isPreset,
                 listingDate = record.listingDate,
+                lotteryDate = record.lotteryDate,
                 analysisDate = record.analysisDate
             )
         }

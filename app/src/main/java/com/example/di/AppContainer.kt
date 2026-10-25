@@ -30,7 +30,8 @@ class AppContainer(context: Context) {
     val repository: IpoAuctionRepository by lazy {
         IpoAuctionRepositoryImpl(
             dao = database.ipoAuctionDao(),
-            apiService = twseApiService
+            apiService = twseApiService,
+            subscriptionApiService = twseSubscriptionApiService
         )
     }
 
