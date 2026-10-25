@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -44,7 +45,7 @@ import java.util.Locale
 
 /**
  * 純抽籤戶實戰指南：單張淨賺試算與關鍵時程
- * 忠實復刻截圖 Image 2 上半部
+ * 專為手機直式最佳化之金融卡片佈局，分層清晰，永不擠壓碰撞。
  */
 @Composable
 fun LotteryExitSection(
@@ -76,7 +77,7 @@ fun LotteryExitSection(
             )
         }
 
-        // 頂部時程與本金卡片 (淡藍底色、微深藍外框)
+        // 頂部時程與本金卡片 (淡藍底色、微深藍外框，分層佈局)
         TopScheduleCard(
             record = record,
             singleLotCost = singleLotCost,
@@ -100,18 +101,21 @@ private fun TopScheduleCard(
     numberFormat: NumberFormat
 ) {
     val statusType = record.statusType
-    val (boardTitle, boardSubtitle) = when (statusType) {
-        IpoStatusType.GOLDEN -> Pair(
+    val (boardTitle, boardSubtitle, titleColor) = when (statusType) {
+        IpoStatusType.GOLDEN -> Triple(
             "【🏆 強力申購！黃金蜜月局】",
-            "超額競標逾 5 倍，且機構得標價遠高於抽籤價，高勝率蜜月首選標案！"
+            "超額競標逾 5 倍，且機構得標價遠高於抽籤價，高勝率蜜月首選標案！",
+            Color(0xFF047857) // Emerald Green
         )
-        IpoStatusType.SAFE -> Pair(
+        IpoStatusType.SAFE -> Triple(
             "【🛡️ 安全申購！穩健防守局】",
-            "具備基礎安全邊際，投標熱度正常，開盤預期守穩最低得標價，屬常態正期望值個案。"
+            "具備基礎安全邊際，投標熱度正常，開盤預期守穩最低得標價，屬常態正期望值個案。",
+            Color(0xFF1D4ED8) // Royal Blue
         )
-        IpoStatusType.CRITICAL_DANGER -> Pair(
+        IpoStatusType.CRITICAL_DANGER -> Triple(
             "【⚠️ 高危警示！慎防破發倒貨局】",
-            "公開申購價高於或等於最低得標價，機構法人持股成本比散戶更低，上市首日倒貨風險極高！"
+            "公開申購價高於或等於最低得標價，機構法人持股成本比散戶更低，上市首日倒貨風險極高！",
+            Color(0xFFB91C1C) // Crimson Red
         )
     }
 
@@ -121,89 +125,122 @@ private fun TopScheduleCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(bannerBg)
-            .border(1.dp, bannerBorder, RoundedCornerShape(14.dp))
-            .padding(18.dp)
+            .border(1.dp, bannerBorder, RoundedCornerShape(16.dp))
+            .padding(16.dp)
     ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = boardTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF1E3A8A) // Navy blue
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = boardSubtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondaryMuted,
-                        lineHeight = 18.sp
-                    )
-                }
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // 第一層：申購定調標題與完整解說（滿版展開，拒絕直排擠壓）
+            Column {
+                Text(
+                    text = boardTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = titleColor
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = boardSubtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondaryMuted,
+                    lineHeight = 20.sp
+                )
+            }
 
-                // 右側單張扣款本金卡片 (純白小卡)
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color.White)
-                        .border(1.dp, LightCardBorder, RoundedCornerShape(10.dp))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.CenterEnd
+            // 第二層：單張準備本金醒目焦點盒
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White)
+                    .border(1.dp, Color(0xFFDBEAFE), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(horizontalAlignment = Alignment.End) {
+                    Column {
                         Text(
-                            text = "單張扣款準備本金 (含70元手續費)",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondaryMuted,
-                            fontSize = 10.sp
+                            text = "單張申購準備本金",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimaryDark
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "$${numberFormat.format(singleLotCost.toLong())} 元",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = TextPrimaryDark,
-                            fontFamily = FontFamily.Monospace
+                            text = "含 20 元處理費 + 50 元中籤工本費",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextLightHint,
+                            fontSize = 11.sp
                         )
                     }
+
+                    Text(
+                        text = "$${numberFormat.format(singleLotCost.toLong())} 元",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF1E3A8A),
+                        fontFamily = FontFamily.Monospace
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
             HorizontalDivider(color = Color(0xFFDBEAFE))
-            Spacer(modifier = Modifier.height(10.dp))
 
-            // 關鍵時程 Row
-            Row(
+            // 第三層：關鍵時程時序排版（清楚 3 步時序，不再水平撞車）
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = "🗓️ 競拍開標日 : ${record.auctionDate}",
+                    text = "關鍵時程追蹤",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF1E40AF),
-                    fontFamily = FontFamily.Monospace
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E40AF)
                 )
-                Text(
-                    text = "⏳ 申購扣款日前夕 : 帳戶請備妥本金",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF15803D), // Green text
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "🚀 預計撥券掛牌日 : ${record.listingDate ?: "開標後 7~9 個營業日"}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF7E22CE), // Purple
-                    fontFamily = FontFamily.Monospace
-                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "🗓️ 開標日 : ${record.auctionDate}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF1E40AF),
+                        fontFamily = FontFamily.Monospace
+                    )
+
+                    Text(
+                        text = "🚀 掛牌日 : ${record.listingDate ?: "開標後約7天"}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF7E22CE),
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFFDCFCE7))
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = "⏳ 提醒：申購扣款日前夕 24:00 前，帳戶請備妥本金！",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF15803D),
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp
+                    )
+                }
             }
         }
     }
@@ -260,6 +297,7 @@ private fun ScenarioTacticCard(
                         fontWeight = FontWeight.Bold,
                         color = TextPrimaryDark
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "出場目標價: $alignedPriceStr 元",
                         style = MaterialTheme.typography.bodySmall,
