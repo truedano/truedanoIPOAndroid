@@ -1,6 +1,5 @@
 package com.example.data.repository
 
-import com.example.data.local.PresetSpoCases
 import com.example.data.local.SpoLotteryDao
 import com.example.data.local.SpoLotteryEntity
 import com.example.data.remote.TwseSubscriptionApiService
@@ -9,7 +8,6 @@ import com.example.domain.model.SpoLotteryRecord
 import com.example.domain.repository.SpoLotteryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
@@ -33,11 +31,8 @@ class SpoLotteryRepositoryImpl(
     }
 
     override suspend fun seedPresetRecordsIfEmpty() {
-        val existing = dao.getAllRecords().first()
-        if (existing.isEmpty()) {
-            val entities = PresetSpoCases.ALL_PRESETS.map { SpoLotteryEntity.fromDomain(it) }
-            dao.insertRecords(entities)
-        }
+        // 不再注入假資料/Preset，直接從 TWSE 即時網路拉取
+        fetchTwseLotteries()
     }
 
     override suspend fun fetchTwseLotteries(): Result<List<SpoLotteryRecord>> = withContext(Dispatchers.IO) {
@@ -60,7 +55,7 @@ class SpoLotteryRepositoryImpl(
                     }
                 }
             } catch (_: Exception) {
-                // 忽略行情 API 錯誤，維持使用 fallback 價格
+                // 忽略行情 API 錯誤
             }
 
             try {
@@ -76,8 +71,15 @@ class SpoLotteryRepositoryImpl(
                 // 忽略上櫃行情 API 錯誤
             }
 
-            // 3. 解析現增標案
-            val parsedRecords = TwseSubscriptionParser.parseResponse(response, priceMap)
+            // 3. 解析現增標案（filterExpiredLotteries = true，嚴格排除已過抽籤日之案件）
+            val parsedRecords = TwseSubscriptionParser.parseResponse(
+                response = response,
+                priceMap = priceMap,
+                filterExpiredLotteries = true
+            )
+
+            // 4. 清除舊的歷史與範例資料，只保留最新進行中案件
+            dao.clearAll()
             if (parsedRecords.isNotEmpty()) {
                 val entities = parsedRecords.map { SpoLotteryEntity.fromDomain(it) }
                 dao.insertRecords(entities)

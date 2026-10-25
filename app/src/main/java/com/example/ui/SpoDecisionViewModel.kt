@@ -3,7 +3,6 @@ package com.example.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.data.local.PresetSpoCases
 import com.example.domain.calculator.SpoDecisionEngine
 import com.example.domain.model.SpoDecisionResult
 import com.example.domain.model.SpoLotteryRecord
@@ -15,19 +14,21 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class SpoUiState(
-    val searchQuery: String = "2884",
-    val currentRecord: SpoLotteryRecord = PresetSpoCases.ALL_PRESETS.first(),
-    val decisionResult: SpoDecisionResult = SpoDecisionEngine.evaluate(PresetSpoCases.ALL_PRESETS.first()),
-    val allRecords: List<SpoLotteryRecord> = PresetSpoCases.ALL_PRESETS,
+    val searchQuery: String = "",
+    val currentRecord: SpoLotteryRecord? = null,
+    val decisionResult: SpoDecisionResult? = null,
+    val allRecords: List<SpoLotteryRecord> = emptyList(),
     val selectedLots: Int = 1,
     val selectedFeeDiscount: Double = 1.0, // 1.0 原價, 0.6 6折, 0.28 2.8折
     val customMarketPriceText: String = "",
     val userMessage: String? = null,
-    val showActiveOnly: Boolean = true,
     val isSyncing: Boolean = false
 ) {
+    /**
+     * 嚴格只回傳「尚未過抽籤日（抽籤日 >= 今天）」的標案
+     */
     val displayRecords: List<SpoLotteryRecord>
-        get() = if (showActiveOnly) allRecords.filter { it.isActive() } else allRecords
+        get() = allRecords.filter { it.isLotteryActive() }
 }
 
 class SpoDecisionViewModel(
@@ -38,42 +39,58 @@ class SpoDecisionViewModel(
     val uiState: StateFlow<SpoUiState> = _uiState.asStateFlow()
 
     init {
-        loadInitialData()
+        observeLocalData()
         syncTwseData()
     }
 
-    private fun loadInitialData() {
+    private fun observeLocalData() {
         viewModelScope.launch {
-            repository.seedPresetRecordsIfEmpty()
             repository.getAllRecords().collect { records ->
-                if (records.isNotEmpty()) {
+                val activeList = records.filter { it.isLotteryActive() }
+                if (activeList.isNotEmpty()) {
                     val current = _uiState.value.currentRecord
-                    val matching = records.find { it.stockCode == current.stockCode } ?: records.first()
-                    updateCurrentRecordInternal(matching, records)
+                    val matching = activeList.find { it.stockCode == current?.stockCode } ?: activeList.first()
+                    updateCurrentRecordInternal(matching, activeList)
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            allRecords = emptyList(),
+                            currentRecord = null,
+                            decisionResult = null
+                        )
+                    }
                 }
             }
         }
     }
 
     /**
-     * 從臺灣證券交易所官方端點同步最新公開申購抽籤日程表
+     * 從臺灣證券交易所官方端點動態拉取最新公開申購抽籤日程表
      */
     fun syncTwseData() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSyncing = true) }
             val result = repository.fetchTwseLotteries()
             result.onSuccess { newRecords ->
+                val activeRecords = newRecords.filter { it.isLotteryActive() }
                 _uiState.update {
                     it.copy(
                         isSyncing = false,
-                        userMessage = "已成功同步證交所最新 ${newRecords.size} 筆增資申購標案！"
+                        userMessage = if (activeRecords.isNotEmpty()) {
+                            "已成功同步證交所最新 ${activeRecords.size} 筆進行中現增標案！"
+                        } else {
+                            "已同步完成，目前無進行中之現增抽籤（前期案件皆已過抽籤日）"
+                        }
                     )
+                }
+                if (activeRecords.isNotEmpty() && _uiState.value.currentRecord == null) {
+                    selectRecord(activeRecords.first())
                 }
             }.onFailure { e ->
                 _uiState.update {
                     it.copy(
                         isSyncing = false,
-                        userMessage = "連線證交所同步失敗：${e.message}（已保留既有紀錄）"
+                        userMessage = "連線證交所同步失敗：${e.message}"
                     )
                 }
             }
@@ -84,16 +101,13 @@ class SpoDecisionViewModel(
         _uiState.update { it.copy(searchQuery = query) }
     }
 
-    fun toggleActiveFilter(activeOnly: Boolean) {
-        _uiState.update { it.copy(showActiveOnly = activeOnly) }
-    }
-
     fun performSearch() {
         val query = _uiState.value.searchQuery.trim()
         if (query.isEmpty()) return
 
-        // 1. 先從本地資料庫或已同步資料查詢
-        val localMatch = _uiState.value.allRecords.find {
+        // 1. 先從已過濾的進行中清單比對
+        val activeRecords = _uiState.value.displayRecords
+        val localMatch = activeRecords.find {
             it.stockCode.equals(query, ignoreCase = true) || it.stockName.contains(query, ignoreCase = true)
         }
 
@@ -102,12 +116,13 @@ class SpoDecisionViewModel(
             return
         }
 
-        // 2. 本地查無，觸發線上重新抓取並搜尋
+        // 2. 若清單沒有，發起即時線上重新同步檢索
         viewModelScope.launch {
             _uiState.update { it.copy(isSyncing = true) }
             val result = repository.fetchTwseLotteries()
             result.onSuccess { remoteList ->
-                val match = remoteList.find {
+                val activeList = remoteList.filter { it.isLotteryActive() }
+                val match = activeList.find {
                     it.stockCode.equals(query, ignoreCase = true) || it.stockName.contains(query, ignoreCase = true)
                 }
                 if (match != null) {
@@ -115,14 +130,14 @@ class SpoDecisionViewModel(
                     _uiState.update {
                         it.copy(
                             isSyncing = false,
-                            userMessage = "已從證交所最新公告取得 [${match.stockCode} ${match.stockName}] 現增案！"
+                            userMessage = "已從證交所公告取得 [${match.stockCode} ${match.stockName}]！"
                         )
                     }
                 } else {
                     _uiState.update {
                         it.copy(
                             isSyncing = false,
-                            userMessage = "證交所近期無 [$query] 之公開增資申購公告，請確認代號"
+                            userMessage = "證交所目前無 [$query] 之進行中現增案（可能尚未開放或已過抽籤日）"
                         )
                     }
                 }
@@ -130,7 +145,7 @@ class SpoDecisionViewModel(
                 _uiState.update {
                     it.copy(
                         isSyncing = false,
-                        userMessage = "查無現增標案 [$query]，請確認股票代號或名稱"
+                        userMessage = "查無現增標案 [$query]，請確認股票代號"
                     )
                 }
             }
@@ -156,8 +171,9 @@ class SpoDecisionViewModel(
     fun onMarketPriceChanged(newPriceText: String) {
         _uiState.update { it.copy(customMarketPriceText = newPriceText) }
         val parsed = newPriceText.toDoubleOrNull()
-        if (parsed != null && parsed > 0) {
-            val updatedRecord = _uiState.value.currentRecord.copy(marketPrice = parsed)
+        val current = _uiState.value.currentRecord
+        if (parsed != null && parsed > 0 && current != null) {
+            val updatedRecord = current.copy(marketPrice = parsed)
             _uiState.update {
                 it.copy(
                     currentRecord = updatedRecord,
@@ -173,11 +189,12 @@ class SpoDecisionViewModel(
 
     fun updateLots(lots: Int) {
         val safeLots = lots.coerceAtLeast(1)
+        val current = _uiState.value.currentRecord ?: return
         _uiState.update {
             it.copy(
                 selectedLots = safeLots,
                 decisionResult = SpoDecisionEngine.evaluate(
-                    record = it.currentRecord,
+                    record = current,
                     lots = safeLots,
                     feeDiscount = it.selectedFeeDiscount
                 )
@@ -186,11 +203,12 @@ class SpoDecisionViewModel(
     }
 
     fun updateFeeDiscount(discount: Double) {
+        val current = _uiState.value.currentRecord ?: return
         _uiState.update {
             it.copy(
                 selectedFeeDiscount = discount,
                 decisionResult = SpoDecisionEngine.evaluate(
-                    record = it.currentRecord,
+                    record = current,
                     lots = it.selectedLots,
                     feeDiscount = discount
                 )

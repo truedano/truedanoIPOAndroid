@@ -58,12 +58,12 @@ data class SpoLotteryRecord(
         get() = 7
 
     /**
-     * 是否為有效案件（撥券日尚未過期 7 天以上）
+     * 判斷抽籤日是否尚未過期（抽籤日 >= 今天）
+     * 若今天已經超過抽籤日，則判定為已過期 (false)
      */
-    fun isActive(today: LocalDate = LocalDate.now()): Boolean {
-        if (isPreset) return true
-        val parsed = parseDateSafe(listingDate) ?: parseDateSafe(endDate) ?: return true
-        return !today.isAfter(parsed.plusDays(7))
+    fun isLotteryActive(today: LocalDate = LocalDate.now()): Boolean {
+        val parsed = parseDateSafe(lotteryDate) ?: return true
+        return !today.isAfter(parsed)
     }
 
     private fun parseDateSafe(str: String): LocalDate? {

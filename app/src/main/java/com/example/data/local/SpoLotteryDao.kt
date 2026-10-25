@@ -18,6 +18,6 @@ interface SpoLotteryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecords(records: List<SpoLotteryEntity>)
 
-    @Query("DELETE FROM spo_lotteries WHERE isPreset = 0")
-    suspend fun clearNonPresets()
+    @Query("DELETE FROM spo_lotteries")
+    suspend fun clearAll()
 }

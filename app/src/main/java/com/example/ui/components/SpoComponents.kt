@@ -71,7 +71,7 @@ fun SpoHeaderAndSearchBar(
     onQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     allRecords: List<SpoLotteryRecord>,
-    activeRecord: SpoLotteryRecord,
+    activeRecord: SpoLotteryRecord?,
     onSelectRecord: (SpoLotteryRecord) -> Unit,
     isSyncing: Boolean = false,
     onSync: () -> Unit = {},
@@ -132,7 +132,7 @@ fun SpoHeaderAndSearchBar(
                 value = query,
                 onValueChange = onQueryChange,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("輸入股票代號 (如 2884)", color = TextLightHint, fontSize = 14.sp) },
+                placeholder = { Text("輸入股票代號 (如 2614)", color = TextLightHint, fontSize = 14.sp) },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(
@@ -172,9 +172,9 @@ fun SpoHeaderAndSearchBar(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // 快速切換 Chips
+        // 進行中標案快速切換 Chips（未過抽籤日）
         Text(
-            text = "⚡ 快速切換實戰案例：",
+            text = "⚡ 進行中現增抽籤（抽籤日未過期）：",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             color = TextSecondaryMuted,
@@ -182,31 +182,47 @@ fun SpoHeaderAndSearchBar(
         )
         Spacer(modifier = Modifier.height(6.dp))
 
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            allRecords.forEach { record ->
-                val isSelected = record.stockCode == activeRecord.stockCode
-                val chipBg = if (isSelected) TextPrimaryDark else Color.White
-                val chipTextColor = if (isSelected) Color.White else TextPrimaryDark
-                val borderColor = if (isSelected) TextPrimaryDark else LightCardBorder
+        if (allRecords.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White, RoundedCornerShape(8.dp))
+                    .border(1.dp, LightCardBorder, RoundedCornerShape(8.dp))
+                    .padding(12.dp)
+            ) {
+                Text(
+                    text = "證交所目前無抽籤日進行中的現增案（前期案件皆已過抽籤日）",
+                    color = TextLightHint,
+                    fontSize = 12.sp
+                )
+            }
+        } else {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                allRecords.forEach { record ->
+                    val isSelected = record.stockCode == activeRecord?.stockCode
+                    val chipBg = if (isSelected) TextPrimaryDark else Color.White
+                    val chipTextColor = if (isSelected) Color.White else TextPrimaryDark
+                    val borderColor = if (isSelected) TextPrimaryDark else LightCardBorder
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(chipBg)
-                        .border(1.dp, borderColor, RoundedCornerShape(8.dp))
-                        .clickable { onSelectRecord(record) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "${record.stockCode} ${record.stockName}",
-                        fontSize = 12.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        color = chipTextColor
-                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(chipBg)
+                            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+                            .clickable { onSelectRecord(record) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "${record.stockCode} ${record.stockName} (${record.lotteryDate} 抽)",
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = chipTextColor
+                        )
+                    }
                 }
             }
         }

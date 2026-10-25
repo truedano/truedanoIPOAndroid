@@ -1,35 +1,20 @@
 package com.example.data.remote
 
 import com.example.domain.model.SpoLotteryRecord
+import java.time.LocalDate
 
 object TwseSubscriptionParser {
 
     /**
      * 解析 TWSE 公開申購抽籤日程表資料 (publicForm 18 欄標準格式)
      *
-     * 欄位定義：
-     * [0] 序號
-     * [1] 抽籤日期
-     * [2] 證券名稱
-     * [3] 證券代號
-     * [4] 發行市場 (如: 上市增資, 上櫃增資, 初上市, 初上櫃, 創新板增資 等)
-     * [5] 申購開始日
-     * [6] 申購結束日
-     * [7] 承銷股數
-     * [8] 實際承銷股數
-     * [9] 承銷價(元)
-     * [10] 實際承銷價(元)
-     * [11] 撥券日期(上市、上櫃日期)
-     * [12] 主辦券商
-     * [13] 申購股數 (例如 1,000 或 2,000)
-     * [14] 總承銷金額(元)
-     * [15] 總合格件
-     * [16] 中籤率(%)
-     * [17] 取消公開申購抽籤
+     * @param filterExpiredLotteries 若為 true，則只保留「抽籤日尚未過期（抽籤日 >= 今天）」的案件
      */
     fun parseResponse(
         response: TwseSubscriptionResponse,
-        priceMap: Map<String, Double> = emptyMap()
+        priceMap: Map<String, Double> = emptyMap(),
+        filterExpiredLotteries: Boolean = true,
+        today: LocalDate = LocalDate.now()
     ): List<SpoLotteryRecord> {
         val rows = response.data ?: return emptyList()
         val fields = response.fields ?: emptyList()
@@ -70,6 +55,16 @@ object TwseSubscriptionParser {
                 val rawEndDate = row.getOrNull(endDateIdx)?.trim().orEmpty()
                 val rawListingDate = row.getOrNull(listingDateIdx)?.trim().orEmpty()
 
+                val formattedLotteryDate = TwseParser.normalizeTwseDate(rawLotteryDate)
+
+                // 抽籤日過期過濾：若抽籤日早於今天，直接排除
+                if (filterExpiredLotteries) {
+                    val parsedLottery = parseDate(formattedLotteryDate)
+                    if (parsedLottery != null && today.isAfter(parsedLottery)) {
+                        continue
+                    }
+                }
+
                 val subPrice = TwseParser.parseDoubleSafe(row.getOrNull(subPriceIdx))
                 if (subPrice <= 0.0) continue
 
@@ -78,13 +73,13 @@ object TwseSubscriptionParser {
                 val sharesPerLot = (sharesPerSub / 1000L).toInt().coerceAtLeast(1)
                 val totalLots = if (sharesPerSub > 0) totalShares / sharesPerSub else totalShares / 1000L
 
-                // 取得現股市價（若即時報價查無，預設為承銷價 * 1.15 做為基準預估，並標記需使用者自訂確認）
+                // 取得現股市價（若查無則以承銷價 * 1.15 為基準預估）
                 val marketPrice = priceMap[rawCode] ?: (subPrice * 1.15)
 
                 val note = buildString {
                     append("【臺灣證交所官方現增申購案】市場類別：$rawMarketType")
                     if (priceMap.containsKey(rawCode)) {
-                        append("，已同步當前最新收盤市價 $marketPrice 元")
+                        append("，已同步最新現股市價 $marketPrice 元")
                     } else {
                         append("，現股市價為預估基準，可於下方手動調整最新市價")
                     }
@@ -98,11 +93,11 @@ object TwseSubscriptionParser {
                         marketPrice = marketPrice,
                         startDate = TwseParser.normalizeTwseDate(rawStartDate),
                         endDate = TwseParser.normalizeTwseDate(rawEndDate),
-                        lotteryDate = TwseParser.normalizeTwseDate(rawLotteryDate),
+                        lotteryDate = formattedLotteryDate,
                         listingDate = TwseParser.normalizeTwseDate(rawListingDate),
                         totalLots = totalLots,
                         sharesPerLot = sharesPerLot,
-                        shortSaleAvailable = false, // 官方申購表未附融券額度，預設保守設為 false，可手動查驗
+                        shortSaleAvailable = false,
                         shortSaleQuota = null,
                         dilutionRate = null,
                         note = note,
@@ -115,6 +110,17 @@ object TwseSubscriptionParser {
         }
 
         return records
+    }
+
+    private fun parseDate(formattedDate: String): LocalDate? {
+        return try {
+            val parts = formattedDate.replace("-", "/").split("/")
+            if (parts.size == 3) {
+                LocalDate.of(parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
+            } else null
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun findIndex(fields: List<String>, keywords: List<String>): Int? {
