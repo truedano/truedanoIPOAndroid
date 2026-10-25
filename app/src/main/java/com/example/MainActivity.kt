@@ -5,15 +5,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import com.example.ui.IpoDashboardScreen
 import com.example.ui.IpoDecisionViewModel
+import com.example.ui.MainTabScreen
+import com.example.ui.SpoDecisionViewModel
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val viewModel: IpoDecisionViewModel by viewModels {
+    private val ipoViewModel: IpoDecisionViewModel by viewModels {
         val app = application as IpoApplication
         IpoDecisionViewModel.Factory(app.container.repository)
+    }
+
+    private val spoViewModel: SpoDecisionViewModel by viewModels {
+        val app = application as IpoApplication
+        SpoDecisionViewModel.Factory(app.container.spoRepository)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -21,7 +27,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                IpoDashboardScreen(viewModel = viewModel)
+                MainTabScreen(
+                    ipoViewModel = ipoViewModel,
+                    spoViewModel = spoViewModel
+                )
             }
         }
     }
