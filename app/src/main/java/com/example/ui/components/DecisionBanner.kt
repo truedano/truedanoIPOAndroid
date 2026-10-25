@@ -50,20 +50,20 @@ fun DecisionBanner(
 ) {
     val statusType = record.statusType
 
-    val (bannerBg, pillBg, statusTitle, statusSubtitle) = when (statusType) {
+    val (bannerBg, pillBg, statusBadgeTitle, statusSubtitle) = when (statusType) {
         IpoStatusType.GOLDEN -> {
             listOf(
                 BannerGoldenGreen,
                 BannerGoldenGreenPill,
-                "🏆 達成黃金獲利公式 (GOLDEN HONEYMOON)",
-                "「合格投標倍數大於 5 倍」+「公開申購價遠低於最低得標價」= 安全且豐厚的蜜月行情！"
+                "🏆 達成黃金獲利公式",
+                "「合格投標倍數大於 5 倍」+「公開申購價遠低於最低得標價」，具備安全且豐厚的蜜月行情！"
             )
         }
         IpoStatusType.SAFE -> {
             listOf(
                 Color(0xFF2563EB), // 皇家藍
                 Color(0xFF1D4ED8),
-                "🛡️ 常態穩健行情 (SAFE)",
+                "🛡️ 常態穩健行情",
                 "具備基礎安全邊際，投標熱度處於常態健康水準，走勢預計於法人得標區間內穩定運行。"
             )
         }
@@ -71,7 +71,7 @@ fun DecisionBanner(
             listOf(
                 BannerInvertedRed,
                 BannerInvertedRedPill,
-                "⚠️ 高危倒掛警訊 (CRITICAL DANGER)",
+                "⚠️ 高危倒掛警訊",
                 "公開申購價高於或等於最低得標價，機構進場成本比抽籤散戶更便宜，留意上市首日倒貨套利破發風險！"
             )
         }
@@ -85,66 +85,89 @@ fun DecisionBanner(
             .fillMaxWidth()
             .testTag("decision_banner"),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = bannerBg as Color)
+        colors = CardDefaults.cardColors(containerColor = bannerBg as Color),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            modifier = Modifier.padding(20.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp)
         ) {
+            // 1. 頂部列：股票名稱與代號 + 狀態標章膠囊
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 左側：股票名稱代號與狀態標章
-                Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
-                        text = "${record.stockName} (${record.stockCode})",
+                        text = record.stockName,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.White.copy(alpha = 0.22f))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = record.stockCode,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
 
-                    Spacer(modifier = Modifier.height(6.dp))
-
+                // 右側狀態徽章
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color.White.copy(alpha = 0.22f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
                     Text(
-                        text = statusTitle as String,
-                        style = MaterialTheme.typography.titleMedium,
+                        text = statusBadgeTitle as String,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = if (statusType == IpoStatusType.GOLDEN) GoldMedal else Color.White
                     )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = statusSubtitle as String,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.95f),
-                        lineHeight = 20.sp
-                    )
                 }
+            }
 
-                Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-                // 右側：浮動藥丸形狀凸顯「預期交易廊道」
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background((pillBg as Color).copy(alpha = 0.85f))
-                        .padding(horizontal = 14.dp, vertical = 12.dp)
-                        .testTag("banner_corridor_pill"),
-                    contentAlignment = Alignment.Center
+            // 2. 核心數值區塊：預期交易廊道
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background((pillBg as Color).copy(alpha = 0.85f))
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .testTag("banner_corridor_pill")
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column {
                         Text(
-                            text = "預期交易廊道",
+                            text = "預期交易廊道 (支撐 ~ 壓力)",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
-                            color = Color.White.copy(alpha = 0.9f)
+                            color = Color.White.copy(alpha = 0.85f)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "$supportStr ~ $resistanceStr 元",
-                            style = MaterialTheme.typography.titleLarge,
+                            style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.White,
                             fontFamily = FontFamily.Monospace
@@ -152,6 +175,16 @@ fun DecisionBanner(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 3. 底部說明文字（滿版寬度橫向排版）
+            Text(
+                text = statusSubtitle as String,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.95f),
+                lineHeight = 20.sp
+            )
         }
     }
 }

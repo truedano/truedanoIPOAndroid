@@ -135,10 +135,12 @@ fun IpoDashboardScreen(
             }
 
             item {
-                // 7. 本地歷史記錄與回測驗證 (Image 3)
+                // 7. 本地歷史記錄與回測驗證 (支援進行中/未過期過濾與最佳化排版)
                 HistorySection(
-                    records = uiState.allRecords,
+                    records = uiState.displayRecords,
                     activeRecord = uiState.currentRecord,
+                    showActiveOnly = uiState.showActiveOnly,
+                    onToggleFilter = { viewModel.toggleActiveFilter(it) },
                     onLoadRecord = { viewModel.selectRecord(it) },
                     onDeleteRecord = { viewModel.deleteRecord(it) },
                     onClearAll = { viewModel.clearAllHistory() }

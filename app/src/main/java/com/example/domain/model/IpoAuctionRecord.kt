@@ -1,5 +1,7 @@
 package com.example.domain.model
 
+import java.time.LocalDate
+
 /**
  * 台灣上市櫃競拍（IPO）開標真實紀錄
  */
@@ -45,6 +47,38 @@ data class IpoAuctionRecord(
             safetyMargin > 0.0 -> IpoStatusType.SAFE
             else -> IpoStatusType.CRITICAL_DANGER
         }
+
+    /**
+     * 判斷是否為進行中／未過期標案
+     * 規則：
+     * 1. 內建教學案例 (isPreset) 一律視為有效
+     * 2. 有掛牌日：掛牌日尚未過去（或在掛牌 7 天蜜月期內）
+     * 3. 無掛牌日：開標日在 30 天以內
+     */
+    fun isActive(today: LocalDate = LocalDate.now()): Boolean {
+        if (isPreset) return true
+
+        val dateToCompare = listingDate?.takeIf { it.isNotBlank() } ?: auctionDate
+        val parsed = parseDateSafe(dateToCompare) ?: return true
+
+        val expirationDate = if (listingDate != null) parsed.plusDays(7) else parsed.plusDays(30)
+        return !today.isAfter(expirationDate)
+    }
+
+    private fun parseDateSafe(str: String): LocalDate? {
+        return try {
+            val clean = str.trim().replace("/", "-")
+            val parts = clean.split("-")
+            if (parts.size == 3) {
+                val y = parts[0].toInt()
+                val m = parts[1].toInt()
+                val d = parts[2].toInt()
+                LocalDate.of(y, m, d)
+            } else null
+        } catch (_: Exception) {
+            null
+        }
+    }
 }
 
 enum class IpoStatusType(val label: String) {

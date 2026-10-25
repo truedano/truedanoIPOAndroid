@@ -52,10 +52,8 @@ class IpoAuctionRepositoryImpl(
                     endDate = endDate
                 )
                 val parsedRecords = TwseParser.parseResponse(response)
-                if (parsedRecords.isNotEmpty()) {
-                    val entities = parsedRecords.map { IpoAuctionEntity.fromDomain(it) }
-                    dao.insertAll(entities)
-                }
+                // 智慧調整：不再強制將整批 API 歷史全部存入使用者歷史資料庫，
+                // 僅回傳解析後的普通股標案清單供查詢比對，維持歷史紀錄純淨。
                 Result.success(parsedRecords)
             } catch (e: Exception) {
                 Result.failure(e)

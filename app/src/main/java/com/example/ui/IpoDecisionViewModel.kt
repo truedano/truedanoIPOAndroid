@@ -22,8 +22,15 @@ data class IpoUiState(
     val selectedLots: Int = 1,
     val selectedFeeDiscount: Double = 1.0, // 1.0 原價, 0.6 6折, 0.28 2.8折
     val isSearching: Boolean = false,
-    val userMessage: String? = null
-)
+    val userMessage: String? = null,
+    val showActiveOnly: Boolean = true // 預設只顯示進行中 / 未過期標案
+) {
+    /**
+     * 依據使用者選擇過濾顯示的紀錄
+     */
+    val displayRecords: List<IpoAuctionRecord>
+        get() = if (showActiveOnly) allRecords.filter { it.isActive() } else allRecords
+}
 
 class IpoDecisionViewModel(
     private val repository: IpoAuctionRepository
@@ -53,6 +60,10 @@ class IpoDecisionViewModel(
         _uiState.update { it.copy(searchQuery = query) }
     }
 
+    fun toggleActiveFilter(activeOnly: Boolean) {
+        _uiState.update { it.copy(showActiveOnly = activeOnly) }
+    }
+
     fun performSearch() {
         val query = _uiState.value.searchQuery.trim()
         if (query.isEmpty()) return
@@ -78,20 +89,21 @@ class IpoDecisionViewModel(
                 }
 
                 if (apiMatch != null) {
+                    // 智慧存入：僅將使用者真正搜尋命中的標案加入本地歷史
                     repository.insertOrUpdate(apiMatch)
                     val updatedList = _uiState.value.allRecords + apiMatch
                     updateCurrentRecordInternal(apiMatch, updatedList)
                     _uiState.update {
                         it.copy(
                             isSearching = false,
-                            userMessage = "成功自 TWSE 獲取 ${apiMatch.stockCode} ${apiMatch.stockName} 開標數據"
+                            userMessage = "成功獲取 ${apiMatch.stockCode} ${apiMatch.stockName} 開標數據並加入歷史"
                         )
                     }
                 } else {
                     _uiState.update {
                         it.copy(
                             isSearching = false,
-                            userMessage = "查無代號「$query」之競拍開標紀錄（請確認代號或該標案是否已完成開標）"
+                            userMessage = "查無代號「$query」之競拍開標紀錄（請確認是否為 4 碼普通股或是否已完成開標）"
                         )
                     }
                 }

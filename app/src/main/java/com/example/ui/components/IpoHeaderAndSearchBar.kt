@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -57,8 +58,9 @@ fun IpoHeaderAndSearchBar(
     ) {
         // 標題與版本徽章
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.Start
         ) {
             Text(
                 text = "🎯",
@@ -69,9 +71,10 @@ fun IpoHeaderAndSearchBar(
                 text = "台股 IPO 競拍真金白銀行情預判系統",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimaryDark
+                color = TextPrimaryDark,
+                modifier = Modifier.weight(1f, fill = false)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
@@ -97,7 +100,7 @@ fun IpoHeaderAndSearchBar(
             color = TextSecondaryMuted,
             fontSize = 12.sp,
             lineHeight = 16.sp,
-            modifier = Modifier.padding(horizontal = 8.dp)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)
         )
 
         Spacer(modifier = Modifier.height(18.dp))
@@ -118,6 +121,12 @@ fun IpoHeaderAndSearchBar(
                         fontSize = 14.sp
                     )
                 },
+                textStyle = TextStyle(
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimaryDark
+                ),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSearch() }),
@@ -129,10 +138,10 @@ fun IpoHeaderAndSearchBar(
                     focusedTextColor = TextPrimaryDark,
                     unfocusedTextColor = TextPrimaryDark
                 ),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .height(52.dp)
+                    .height(56.dp)
                     .testTag("search_text_input")
             )
 
@@ -140,9 +149,9 @@ fun IpoHeaderAndSearchBar(
                 onClick = onSearch,
                 enabled = !isSearching,
                 colors = ButtonDefaults.buttonColors(containerColor = SearchButtonRed),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
-                    .height(52.dp)
+                    .height(56.dp)
                     .testTag("search_action_button")
             ) {
                 if (isSearching) {

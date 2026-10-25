@@ -44,6 +44,11 @@ object TwseParser {
         val nameIdx = findExactOrContains(fields, listOf("證券名稱", "股票名稱")) ?: 2
         val codeIdx = findExactOrContains(fields, listOf("證券代號", "股票代號", "代號")) ?: 3
 
+        val listingDateIdx = fields.indexOfFirst {
+            val clean = it.replace(" ", "")
+            clean.contains("撥券日期") || clean.contains("上市日期") || clean.contains("上櫃日期")
+        }.takeIf { it >= 0 } ?: 15
+
         // 競拍釋出張數：必須精準匹配「競拍數量」或「競價拍賣數量」，嚴禁匹配「取消競價拍賣」或「最高投(得)標數量」
         val totalSharesIdx = fields.indexOfFirst {
             val clean = it.replace(" ", "")
@@ -92,6 +97,9 @@ object TwseParser {
 
                 if (rawCode.isBlank() || rawName.isBlank()) continue
 
+                // 智慧過濾：只保留 4 碼普通股之 IPO，過濾可轉債（5 碼）、權證與其他衍生性金融商品
+                if (rawCode.length != 4 || !rawCode.all { it.isDigit() }) continue
+
                 val totalShares = parseLongSafe(row.getOrNull(totalSharesIdx))
                 val validShares = parseLongSafe(row.getOrNull(validBidSharesIdx))
                 val minPrice = parseDoubleSafe(row.getOrNull(minPriceIdx))
@@ -103,6 +111,9 @@ object TwseParser {
                 if (minPrice <= 0.0 && avgPrice <= 0.0) continue
 
                 val formattedDate = normalizeTwseDate(rawDate)
+
+                val rawListingDate = row.getOrNull(listingDateIdx)?.trim().orEmpty()
+                val formattedListingDate = if (rawListingDate.isNotBlank()) normalizeTwseDate(rawListingDate) else null
 
                 records.add(
                     IpoAuctionRecord(
@@ -117,7 +128,8 @@ object TwseParser {
                         subscriptionPrice = subPrice,
                         emergingMarketPrice = null,
                         note = "臺灣證交所官方開標紀錄",
-                        isPreset = false
+                        isPreset = false,
+                        listingDate = formattedListingDate
                     )
                 )
             } catch (_: Exception) {
@@ -150,26 +162,42 @@ object TwseParser {
     fun parseDoubleOrNull(value: String?): Double? {
         if (value.isNullOrBlank()) return null
         val clean = value.replace(",", "").replace(" ", "").trim()
-        val num = clean.toDoubleOrNull() ?: return null
-        return if (num > 0.0) num else null
+        return clean.toDoubleOrNull()
     }
 
     fun parseLongSafe(value: String?): Long {
         if (value.isNullOrBlank()) return 0L
         val clean = value.replace(",", "").replace(" ", "").trim()
-        val d = clean.toDoubleOrNull() ?: 0.0
-        return d.toLong()
+        return clean.toLongOrNull() ?: 0L
     }
 
-    fun normalizeTwseDate(rawDate: String): String {
-        val parts = rawDate.split("/", "-")
+    /**
+     * 標準化民國年或西元年字串為 YYYY/MM/DD
+     * 例如 "115/10/19" -> "2026/10/19", "20261019" -> "2026/10/19"
+     */
+    fun normalizeTwseDate(dateStr: String): String {
+        val clean = dateStr.trim().replace("-", "/")
+        val parts = clean.split("/")
         if (parts.size == 3) {
-            val rocYear = parts[0].toIntOrNull()
-            if (rocYear != null && rocYear < 1900) {
-                val adYear = rocYear + 1911
-                return "$adYear/${parts[1].padStart(2, '0')}/${parts[2].padStart(2, '0')}"
-            }
+            val year = parts[0].toIntOrNull() ?: return dateStr
+            val normalizedYear = if (year < 1911) year + 1911 else year
+            val month = parts[1].padStart(2, '0')
+            val day = parts[2].padStart(2, '0')
+            return "$normalizedYear/$month/$day"
         }
-        return rawDate
+        if (clean.length == 8 && clean.all { it.isDigit() }) {
+            val y = clean.substring(0, 4)
+            val m = clean.substring(4, 6)
+            val d = clean.substring(6, 8)
+            return "$y/$m/$d"
+        }
+        if (clean.length == 7 && clean.all { it.isDigit() }) {
+            val rocYear = clean.substring(0, 3).toIntOrNull() ?: return dateStr
+            val y = rocYear + 1911
+            val m = clean.substring(3, 5)
+            val d = clean.substring(5, 7)
+            return "$y/$m/$d"
+        }
+        return dateStr
     }
 }

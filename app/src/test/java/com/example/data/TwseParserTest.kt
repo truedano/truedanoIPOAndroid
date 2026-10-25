@@ -37,6 +37,7 @@ class TwseParserTest {
         assertEquals("6825", record.stockCode)
         assertEquals("和暢科技", record.stockName)
         assertEquals("2026/10/19", record.auctionDate)
+        assertEquals("2026/10/30", record.listingDate)
 
         // 競拍釋出張數必須為 3568 張，絕對不能被誤抓為股票代號 6825！
         assertEquals(3568L, record.totalAuctionShares)
@@ -56,5 +57,23 @@ class TwseParserTest {
         assertEquals(3.505, record.bidRatio, 0.01)
         // 安全邊際 = 20.32 - 22.81 = -2.49 元（倒掛）
         assertEquals(-2.49, record.safetyMargin, 0.01)
+    }
+
+    @Test
+    fun testParseTwseResponseFiltersOutConvertibleBonds() {
+        val fields = listOf("開標日期", "證券名稱", "證券代號", "最低得標價格(元)", "得標加權平均價格(元)")
+        val cbRow = listOf("2026/10/19", "生合一", "12951", "105.0", "110.0")
+        val stockRow = listOf("2026/10/19", "和暢科技", "6825", "20.32", "22.81")
+
+        val response = TwseAuctionResponse(
+            stat = "OK",
+            fields = fields,
+            data = listOf(cbRow, stockRow)
+        )
+
+        val records = TwseParser.parseResponse(response)
+        // 5 碼可轉債 12951 應被過濾，僅保留 4 碼普通股 6825
+        assertEquals(1, records.size)
+        assertEquals("6825", records[0].stockCode)
     }
 }

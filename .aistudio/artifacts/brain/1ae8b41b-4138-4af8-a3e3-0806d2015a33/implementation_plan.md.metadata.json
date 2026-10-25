@@ -1,6 +1,0 @@
-{
-  "summary":  "台股 IPO 競拍蜜月行情預判決策引擎 Android App 實作架構規劃。涵蓋台股 6 檔 Tick Size 強制對齊演算法、真金白銀法人籌碼定錨三步法、黃金獲利公式判定、三段出場情境試算（保守/基準/樂觀）、TWSE API 介接與離線經典案例備援、Room 資料庫持久化與現代深色金融終端 UI。",
-  "updatedAt":  "2026-10-24T06:51:41.448438227Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}
