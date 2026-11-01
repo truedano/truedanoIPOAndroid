@@ -9,6 +9,7 @@ import com.example.data.repository.IpoAuctionRepositoryImpl
 import com.example.data.repository.SpoLotteryRepositoryImpl
 import com.example.domain.repository.IpoAuctionRepository
 import com.example.domain.repository.SpoLotteryRepository
+import com.example.updater.AppUpdateManager
 
 class AppContainer(context: Context) {
     val database: IpoDatabase by lazy {
@@ -40,5 +41,9 @@ class AppContainer(context: Context) {
             dao = spoDatabase.spoLotteryDao(),
             apiService = twseSubscriptionApiService
         )
+    }
+
+    val updateManager: AppUpdateManager by lazy {
+        AppUpdateManager(context)
     }
 }

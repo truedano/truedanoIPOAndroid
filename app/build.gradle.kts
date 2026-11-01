@@ -8,6 +8,18 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
+val versionPropsFile = rootProject.file("version.properties")
+val versionProps = java.util.Properties().apply {
+  if (versionPropsFile.exists()) {
+    load(versionPropsFile.inputStream())
+  }
+}
+val versionMajor = (versionProps.getProperty("VERSION_MAJOR") ?: "1").toInt()
+val versionMinor = (versionProps.getProperty("VERSION_MINOR") ?: "0").toInt()
+val versionPatch = (versionProps.getProperty("VERSION_PATCH") ?: "0").toInt()
+val appVersionCode = versionMajor * 10000 + versionMinor * 100 + versionPatch
+val appVersionName = "$versionMajor.$versionMinor.$versionPatch"
+
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
@@ -16,8 +28,8 @@ android {
     applicationId = "com.aistudio.ipodecision.twse"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = appVersionCode
+    versionName = appVersionName
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -29,7 +41,7 @@ android {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
       storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
+      keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
