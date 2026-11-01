@@ -27,7 +27,8 @@ object TwseSubscriptionParser {
         val startDateIdx = findIndex(fields, listOf("申購開始日", "申購開始")) ?: 5
         val endDateIdx = findIndex(fields, listOf("申購結束日", "申購截止", "申購結束")) ?: 6
         val totalSharesIdx = findIndex(fields, listOf("實際承銷股數", "承銷股數")) ?: 8
-        val subPriceIdx = findIndex(fields, listOf("實際承銷價", "實際承銷價格", "承銷價", "承銷價格")) ?: 10
+        val actualPriceIdx = findIndex(fields, listOf("實際承銷價", "實際承銷價格")) ?: 10
+        val tentativePriceIdx = findIndex(fields, listOf("承銷價", "承銷價格")) ?: 9
         val listingDateIdx = findIndex(fields, listOf("撥券日期", "上市日期", "上櫃日期")) ?: 11
         val lotSharesIdx = findIndex(fields, listOf("申購股數")) ?: 13
 
@@ -35,7 +36,7 @@ object TwseSubscriptionParser {
 
         for (row in rows) {
             try {
-                if (row.size <= maxOf(codeIdx, nameIdx, subPriceIdx)) continue
+                if (row.size <= maxOf(codeIdx, nameIdx)) continue
 
                 val rawCode = row.getOrNull(codeIdx)?.trim().orEmpty()
                 val rawName = row.getOrNull(nameIdx)?.trim().orEmpty()
@@ -65,8 +66,14 @@ object TwseSubscriptionParser {
                     }
                 }
 
-                val subPrice = TwseParser.parseDoubleSafe(row.getOrNull(subPriceIdx))
+                val rawActualPrice = row.getOrNull(actualPriceIdx)
+                val rawTentativePrice = row.getOrNull(tentativePriceIdx)
+                val actualPrice = TwseParser.parseDoubleSafe(rawActualPrice)
+                val tentativePrice = TwseParser.parseDoubleSafe(rawTentativePrice)
+                val subPrice = if (actualPrice > 0.0) actualPrice else tentativePrice
                 if (subPrice <= 0.0) continue
+
+                val isTentative = actualPrice <= 0.0 && tentativePrice > 0.0
 
                 val totalShares = TwseParser.parseLongSafe(row.getOrNull(totalSharesIdx))
                 val sharesPerSub = TwseParser.parseLongSafe(row.getOrNull(lotSharesIdx)).coerceAtLeast(1000L)
@@ -78,6 +85,9 @@ object TwseSubscriptionParser {
 
                 val note = buildString {
                     append("【臺灣證交所官方現增申購案】市場類別：$rawMarketType")
+                    if (isTentative) {
+                        append("，目前為暫定承銷價 $subPrice 元（實際承銷價未訂出）")
+                    }
                     if (priceMap.containsKey(rawCode)) {
                         append("，已同步最新現股市價 $marketPrice 元")
                     } else {

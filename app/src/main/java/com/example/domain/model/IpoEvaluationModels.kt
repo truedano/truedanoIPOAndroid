@@ -9,6 +9,12 @@ enum class MarketHeatLevel(
     val minThreshold: Double,
     val maxThreshold: Double
 ) {
+    PENDING(
+        title = "競拍投標中",
+        description = "標案尚未開標，待開標日揭曉合格投標數量與市場熱度",
+        minThreshold = 0.0,
+        maxThreshold = 0.0
+    ),
     HOT(
         title = "燙手 (超額追捧)",
         description = "投標倍數超過 5.0 倍，市場人氣鼎盛，蜜月暴衝潛力高",
@@ -29,7 +35,8 @@ enum class MarketHeatLevel(
     );
 
     companion object {
-        fun fromRatio(ratio: Double): MarketHeatLevel {
+        fun fromRatio(ratio: Double, isCompleted: Boolean = true): MarketHeatLevel {
+            if (!isCompleted) return PENDING
             return when {
                 ratio > 5.0 -> HOT
                 ratio >= 2.5 -> NEUTRAL
@@ -47,6 +54,11 @@ enum class SafetyMarginStatus(
     val isSafe: Boolean,
     val description: String
 ) {
+    PENDING(
+        title = "待開標定錨",
+        isSafe = true,
+        description = "競價拍賣進行中，底標價與暫定承銷價已公告，開標後將自動比對機構得標成本"
+    ),
     SAFE(
         title = "安全訊號",
         isSafe = true,
@@ -59,7 +71,8 @@ enum class SafetyMarginStatus(
     );
 
     companion object {
-        fun fromMargin(margin: Double): SafetyMarginStatus {
+        fun fromMargin(margin: Double, isCompleted: Boolean = true): SafetyMarginStatus {
+            if (!isCompleted) return PENDING
             return if (margin > 0.0) SAFE else INVERTED_DANGER
         }
     }

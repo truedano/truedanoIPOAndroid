@@ -192,7 +192,7 @@ fun IpoHeaderAndSearchBar(
 
         // 進行中初上市櫃（IPO）快速切換標籤
         Text(
-            text = "⚡ 進行中初上市櫃（IPO）標案：",
+            text = "⚡ 進行中初上市櫃（IPO 抽籤決策 • 抽籤日前有效）：",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             color = TextSecondaryMuted,
@@ -209,7 +209,7 @@ fun IpoHeaderAndSearchBar(
                     .padding(12.dp)
             ) {
                 Text(
-                    text = "證交所目前無進行中之 IPO 競拍標案（前期案件蜜月期皆已結束）",
+                    text = "證交所目前無進行中之 IPO 競拍標案（抽籤日前有效）",
                     color = TextLightHint,
                     fontSize = 12.sp
                 )

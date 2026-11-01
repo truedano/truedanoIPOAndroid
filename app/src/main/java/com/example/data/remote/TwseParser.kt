@@ -28,6 +28,21 @@ object TwseParser {
             clean.contains("撥券日期") || clean.contains("上市日期") || clean.contains("上櫃日期")
         }.takeIf { it >= 0 } ?: 15
 
+        val minBidPriceIdx = fields.indexOfFirst {
+            val clean = it.replace(" ", "")
+            clean.contains("最低投標價格") || clean.contains("最低投標價") || clean.contains("底標價")
+        }.takeIf { it >= 0 } ?: 10
+
+        val biddingStartDateIdx = fields.indexOfFirst {
+            val clean = it.replace(" ", "")
+            clean.contains("投標開始日") || clean.contains("投標開始")
+        }.takeIf { it >= 0 } ?: 7
+
+        val biddingEndDateIdx = fields.indexOfFirst {
+            val clean = it.replace(" ", "")
+            clean.contains("投標結束日") || clean.contains("投標結束") || clean.contains("投標截止")
+        }.takeIf { it >= 0 } ?: 8
+
         // 競拍釋出張數
         val totalSharesIdx = fields.indexOfFirst {
             val clean = it.replace(" ", "")
@@ -91,14 +106,28 @@ object TwseParser {
                     subPrice = subPriceMap[rawCode] ?: 0.0
                 }
 
-                // 若尚未開標（得標金額與價格均為 0），略過未開標項目
-                if (minPrice <= 0.0 && avgPrice <= 0.0) continue
+                val minBidPrice = parseDoubleOrNull(row.getOrNull(minBidPriceIdx))
+                val rawBiddingStart = row.getOrNull(biddingStartDateIdx)?.trim().orEmpty()
+                val rawBiddingEnd = row.getOrNull(biddingEndDateIdx)?.trim().orEmpty()
+                val biddingStart = if (rawBiddingStart.isNotBlank()) normalizeTwseDate(rawBiddingStart) else null
+                val biddingEnd = if (rawBiddingEnd.isNotBlank()) normalizeTwseDate(rawBiddingEnd) else null
+
+                val isCompleted = minPrice > 0.0 && avgPrice > 0.0
+
+                // 若尚未開標，且底標價與承銷價皆查無資料（可能為非普通股空白廢行），才略過
+                if (!isCompleted && (minBidPrice == null || minBidPrice <= 0.0) && subPrice <= 0.0) continue
 
                 val formattedDate = normalizeTwseDate(rawDate)
 
                 val rawListingDate = row.getOrNull(listingDateIdx)?.trim().orEmpty()
                 val formattedListingDate = if (rawListingDate.isNotBlank()) normalizeTwseDate(rawListingDate) else null
                 val matchedLotteryDate = lotteryDateMap[rawCode]
+
+                val noteText = if (!isCompleted) {
+                    "【臺灣證交所競拍進行中】尚未開標（底標價：${minBidPrice ?: 0.0} 元，暫定承銷價：$subPrice 元，預計 $formattedDate 開標）"
+                } else {
+                    "臺灣證交所官方開標紀錄"
+                }
 
                 records.add(
                     IpoAuctionRecord(
@@ -112,10 +141,13 @@ object TwseParser {
                         maxWinningPrice = maxPrice,
                         subscriptionPrice = subPrice,
                         emergingMarketPrice = null,
-                        note = "臺灣證交所官方開標紀錄",
+                        note = noteText,
                         isPreset = false,
                         listingDate = formattedListingDate,
-                        lotteryDate = matchedLotteryDate
+                        lotteryDate = matchedLotteryDate,
+                        minBidPrice = minBidPrice,
+                        biddingStartDate = biddingStart,
+                        biddingEndDate = biddingEnd
                     )
                 )
             } catch (_: Exception) {

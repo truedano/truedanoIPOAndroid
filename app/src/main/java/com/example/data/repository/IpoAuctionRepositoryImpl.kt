@@ -50,9 +50,10 @@ class IpoAuctionRepositoryImpl(
                     endDate = endDate
                 )
 
-                // 2. 嘗試抓取公開申購抽籤日程 (初上市與初上櫃案件)，獲取抽籤日與承銷價
+                // 2. 嘗試抓取公開申購抽籤日程 (初上市與初上櫃案件)，獲取抽籤日、承銷價 (含實際承銷價與暫定承銷價回退)
                 val lotteryDateMap = mutableMapOf<String, String>()
                 val subPriceMap = mutableMapOf<String, Double>()
+                val upcomingIpoList = mutableListOf<IpoAuctionRecord>()
 
                 try {
                     val subResponse = subscriptionApiService?.getPublicLotteries()
@@ -60,17 +61,54 @@ class IpoAuctionRepositoryImpl(
                     if (rows != null) {
                         for (row in rows) {
                             val code = row.getOrNull(3)?.trim().orEmpty()
+                            val name = row.getOrNull(2)?.trim().orEmpty()
                             val marketType = row.getOrNull(4)?.trim().orEmpty()
                             val rawLotteryDate = row.getOrNull(1)?.trim().orEmpty()
-                            val rawSubPrice = row.getOrNull(10)?.trim().orEmpty()
+                            val rawTentativePrice = row.getOrNull(9)?.trim().orEmpty()
+                            val rawActualPrice = row.getOrNull(10)?.trim().orEmpty()
+                            val rawListingDate = row.getOrNull(11)?.trim().orEmpty()
+                            val rawShares = row.getOrNull(8)?.trim().orEmpty().ifBlank { row.getOrNull(7)?.trim().orEmpty() }
 
                             if (code.length == 4 && (marketType.contains("初上市") || marketType.contains("初上櫃"))) {
-                                if (rawLotteryDate.isNotBlank()) {
-                                    lotteryDateMap[code] = TwseParser.normalizeTwseDate(rawLotteryDate)
+                                val formattedLotteryDate = if (rawLotteryDate.isNotBlank()) TwseParser.normalizeTwseDate(rawLotteryDate) else null
+                                val formattedListingDate = if (rawListingDate.isNotBlank()) TwseParser.normalizeTwseDate(rawListingDate) else null
+
+                                if (formattedLotteryDate != null) {
+                                    lotteryDateMap[code] = formattedLotteryDate
                                 }
-                                val price = TwseParser.parseDoubleSafe(rawSubPrice)
+
+                                val actualPrice = TwseParser.parseDoubleSafe(rawActualPrice)
+                                val tentativePrice = TwseParser.parseDoubleSafe(rawTentativePrice)
+                                // 實際承銷價若為「未訂出」，自動回退使用「承銷價 (暫定承銷價)」
+                                val price = if (actualPrice > 0.0) actualPrice else tentativePrice
+
                                 if (price > 0.0) {
                                     subPriceMap[code] = price
+
+                                    val isTentative = actualPrice <= 0.0 && tentativePrice > 0.0
+                                    val totalShares = (TwseParser.parseLongSafe(rawShares) / 1000L).coerceAtLeast(1L)
+                                    val noteText = if (isTentative) {
+                                        "【證交所公開申購排程】暫定承銷價 $price 元（實際承銷價未訂出，開標後將自動更新最終定價）"
+                                    } else {
+                                        "【證交所公開申購排程】已敲定實際承銷價 $price 元"
+                                    }
+
+                                    upcomingIpoList.add(
+                                        IpoAuctionRecord(
+                                            stockCode = code,
+                                            stockName = name,
+                                            auctionDate = formattedLotteryDate ?: "即將開標",
+                                            totalAuctionShares = totalShares,
+                                            validBidShares = totalShares,
+                                            minWinningPrice = price,
+                                            avgWeightedPrice = price,
+                                            maxWinningPrice = price,
+                                            subscriptionPrice = price,
+                                            lotteryDate = formattedLotteryDate,
+                                            listingDate = formattedListingDate,
+                                            note = noteText
+                                        )
+                                    )
                                 }
                             }
                         }
@@ -84,9 +122,17 @@ class IpoAuctionRepositoryImpl(
                     response = auctionResponse,
                     lotteryDateMap = lotteryDateMap,
                     subPriceMap = subPriceMap
-                )
+                ).toMutableList()
 
-                // 4. 只保留進行中／未過期（掛牌7天內或抽籤10天內）之 IPO 案件
+                // 補全：如果申購日程表已有「初上市/初上櫃」標案，但競拍開標公告尚未有紀錄 (如未開標之新股)，將其補入清單
+                val existingCodes = parsedRecords.map { it.stockCode }.toSet()
+                for (upcoming in upcomingIpoList) {
+                    if (upcoming.stockCode !in existingCodes) {
+                        parsedRecords.add(upcoming)
+                    }
+                }
+
+                // 4. 只保留抽籤日未過期 (today <= lotteryDate) 之 IPO 標案
                 val activeRecords = parsedRecords.filter { it.isActive() }
 
                 // 5. 更新本地資料庫（清空過期舊資料，只寫入最新真實進行中標案）

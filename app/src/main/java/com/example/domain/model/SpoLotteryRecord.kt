@@ -5,6 +5,13 @@ import java.time.LocalDate
 /**
  * 台灣已上市櫃公司現金增資（SPO）公開申購抽籤紀錄
  */
+enum class SpoStage {
+    OPEN,        // 開放申購中 (startDate <= today <= endDate)
+    UPCOMING,    // 即將開放申購 (today < startDate)
+    BALLOTING,   // 申購已截止，等待抽籤開獎 (endDate < today <= lotteryDate)
+    CLOSED       // 抽籤結束 (today > lotteryDate)
+}
+
 data class SpoLotteryRecord(
     val stockCode: String,
     val stockName: String,
@@ -58,12 +65,62 @@ data class SpoLotteryRecord(
         get() = 7
 
     /**
+     * 取得當前抽籤決策生命週期階段
+     */
+    fun getStage(today: LocalDate = LocalDate.now()): SpoStage {
+        val start = parseDateSafe(startDate)
+        val end = parseDateSafe(endDate)
+        val lottery = parseDateSafe(lotteryDate)
+
+        if (lottery != null && today.isAfter(lottery)) {
+            return SpoStage.CLOSED
+        }
+        if (end != null && today.isAfter(end)) {
+            return SpoStage.BALLOTING
+        }
+        if (start != null && today.isBefore(start)) {
+            return SpoStage.UPCOMING
+        }
+        return SpoStage.OPEN
+    }
+
+    /**
+     * 取得抽籤決策狀態徽章文字
+     */
+    fun getStatusBadge(today: LocalDate = LocalDate.now()): String {
+        return when (getStage(today)) {
+            SpoStage.OPEN -> {
+                val end = parseDateSafe(endDate)
+                if (end != null) {
+                    val daysRemaining = java.time.temporal.ChronoUnit.DAYS.between(today, end)
+                    if (daysRemaining <= 0L) "🔥 今日截止"
+                    else "🔥 申購中(剩${daysRemaining}天)"
+                } else "🔥 申購中"
+            }
+            SpoStage.UPCOMING -> {
+                val start = parseDateSafe(startDate)
+                if (start != null) {
+                    val daysUntil = java.time.temporal.ChronoUnit.DAYS.between(today, start)
+                    if (daysUntil == 1L) "⏳ 明日開放"
+                    else "⏳ ${start.monthValue}/${start.dayOfMonth} 開放"
+                } else "⏳ 即將開放"
+            }
+            SpoStage.BALLOTING -> {
+                val lottery = parseDateSafe(lotteryDate)
+                if (lottery != null && today == lottery) "🎉 今日抽籤"
+                else if (lottery != null) "⏳ 待開獎(${lottery.monthValue}/${lottery.dayOfMonth})"
+                else "⏳ 等待開獎"
+            }
+            SpoStage.CLOSED -> "已結束"
+        }
+    }
+
+    /**
      * 判斷抽籤日是否尚未過期（抽籤日 >= 今天）
-     * 若今天已經超過抽籤日，則判定為已過期 (false)
+     * 針對「輔助投資人抽籤決策」定位：抽籤日當天或之前為有效決策期，過期則移除
      */
     fun isLotteryActive(today: LocalDate = LocalDate.now()): Boolean {
-        val parsed = parseDateSafe(lotteryDate) ?: return true
-        return !today.isAfter(parsed)
+        return getStage(today) != SpoStage.CLOSED
     }
 
     private fun parseDateSafe(str: String): LocalDate? {

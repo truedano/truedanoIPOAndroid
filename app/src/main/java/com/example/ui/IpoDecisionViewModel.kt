@@ -24,10 +24,18 @@ data class IpoUiState(
     val userMessage: String? = null
 ) {
     /**
-     * 嚴格只回傳進行中／未過期（抽籤或掛牌蜜月期尚未結束）的 IPO 標案
+     * 針對「輔助投資人抽籤決策」排序與過濾：
+     * 1. 嚴格只回傳抽籤日未過期 (today <= lotteryDate) 的 IPO 標案
+     * 2. 優先按抽籤日程排序，最接近抽籤開獎者排前
      */
     val displayRecords: List<IpoAuctionRecord>
-        get() = allRecords.filter { it.isActive() }
+        get() = allRecords
+            .filter { it.isActive() }
+            .sortedWith(
+                compareBy<IpoAuctionRecord> {
+                    it.lotteryDate ?: "9999-99-99"
+                }.thenBy { it.auctionDate }
+            )
 }
 
 class IpoDecisionViewModel(
@@ -45,7 +53,13 @@ class IpoDecisionViewModel(
     private fun observeLocalData() {
         viewModelScope.launch {
             repository.getAllRecords().collect { records ->
-                val activeList = records.filter { it.isActive() }
+                val activeList = records
+                    .filter { it.isActive() }
+                    .sortedWith(
+                        compareBy<IpoAuctionRecord> {
+                            it.lotteryDate ?: "9999-99-99"
+                        }.thenBy { it.auctionDate }
+                    )
                 if (activeList.isNotEmpty()) {
                     val current = _uiState.value.currentRecord
                     val matching = activeList.find { it.stockCode == current?.stockCode } ?: activeList.first()

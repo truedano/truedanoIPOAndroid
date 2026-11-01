@@ -98,12 +98,14 @@ private fun Step1HeatCard(
     numberFormat: NumberFormat
 ) {
     val statusColor = when (heatLevel) {
+        MarketHeatLevel.PENDING -> Color(0xFF0F766E)
         MarketHeatLevel.HOT -> StatusGreen
         MarketHeatLevel.NEUTRAL -> TextPrimaryDark
         MarketHeatLevel.COLD -> StatusRed
     }
 
     val explanation = when (heatLevel) {
+        MarketHeatLevel.PENDING -> "標案目前處於投標或待開標階段，待開標日結算揭曉合格投標張數與市場熱度倍數。"
         MarketHeatLevel.HOT -> "資金高度追捧，市場籌碼供不應求。法人大戶投標熱絡，上市首日的蜜月行情非常值得期待！"
         MarketHeatLevel.NEUTRAL -> "投標倍數處於中性常態區間，法人進場意願平穩，上市初期依大盤氛圍尋求價格中樞。"
         MarketHeatLevel.COLD -> "投標動能明顯偏冷，法人參標意願低迷，上市首日買盤缺乏追價意願，需嚴控風險。"
@@ -114,7 +116,7 @@ private fun Step1HeatCard(
         pillBg = Step1BlueBg,
         pillTextColor = Step1BlueText,
         subtitle = "合格投標量 / 競拍總量",
-        mainValue = "${String.format("%.2f", ratio)}x",
+        mainValue = if (heatLevel == MarketHeatLevel.PENDING) "待開標" else "${String.format("%.2f", ratio)}x",
         mainValueColor = TextPrimaryDark,
         statusText = heatLevel.title,
         statusColor = statusColor,
@@ -131,11 +133,14 @@ private fun Step2SafetyMarginCard(
     minPrice: Double,
     subPrice: Double
 ) {
+    val isPending = marginStatus == SafetyMarginStatus.PENDING
     val isSafe = marginStatus.isSafe
-    val statusColor = if (isSafe) StatusGreen else StatusRed
-    val formattedMargin = "${if (margin > 0) "+" else ""}${String.format("%.2f", margin)} 元"
+    val statusColor = if (isPending) Color(0xFF0F766E) else if (isSafe) StatusGreen else StatusRed
+    val formattedMargin = if (isPending) "待定價" else "${if (margin > 0) "+" else ""}${String.format("%.2f", margin)} 元"
 
-    val explanation = if (isSafe) {
+    val explanation = if (isPending) {
+        "競價拍賣進行中，底標價為 ${TickSizeAligner.formatPrice(minPrice)} 元，暫定公開申購價為 ${TickSizeAligner.formatPrice(subPrice)} 元。開標後將自動為您比對機構法人進場成本與抽籤價差。"
+    } else if (isSafe) {
         "所有競拍得標法人的成本（最低 ${TickSizeAligner.formatPrice(minPrice)} 元）都高於你的抽籤價（${TickSizeAligner.formatPrice(subPrice)} 元）。抽籤者具備極佳的持股安全邊際，首日賺取價差機率極高。"
     } else {
         "公開申購價（${TickSizeAligner.formatPrice(subPrice)} 元）高於或等於機構得標價（最低 ${TickSizeAligner.formatPrice(minPrice)} 元）。機構法人持倉比抽籤散戶更便宜，上市首日極易引發法人拋售倒貨套利！"
@@ -148,7 +153,7 @@ private fun Step2SafetyMarginCard(
         subtitle = "最低得標價 vs 公開申購價",
         mainValue = formattedMargin,
         mainValueColor = statusColor,
-        statusText = if (isSafe) "安全訊號 (具安全邊際)" else "極度危險倒掛 (無安全邊際)",
+        statusText = if (isPending) "待開標定錨 (尚未開標)" else if (isSafe) "安全訊號 (具安全邊際)" else "極度危險倒掛 (無安全邊際)",
         statusColor = statusColor,
         explanation = explanation,
         footerText = "抽籤申購價: ${TickSizeAligner.formatPrice(subPrice)} 元 | 最低得標價: ${TickSizeAligner.formatPrice(minPrice)} 元",

@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import com.example.domain.model.SpoDecisionResult
 import com.example.domain.model.SpoLotteryRecord
 import com.example.domain.model.SpoRiskGrade
+import com.example.domain.model.SpoStage
 import com.example.ui.theme.BannerGoldenGreen
 import com.example.ui.theme.BannerInvertedRed
 import com.example.ui.theme.LightCardBackground
@@ -174,7 +175,7 @@ fun SpoHeaderAndSearchBar(
 
         // 進行中標案快速切換 Chips（未過抽籤日）
         Text(
-            text = "⚡ 進行中現增抽籤（抽籤日未過期）：",
+            text = "⚡ 進行中現增抽籤（申購中優先 • 抽籤日前有效）：",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             color = TextSecondaryMuted,
@@ -217,7 +218,7 @@ fun SpoHeaderAndSearchBar(
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Text(
-                            text = "${record.stockCode} ${record.stockName} (${record.lotteryDate} 抽)",
+                            text = "${record.stockCode} ${record.stockName} (${record.getStatusBadge()})",
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                             color = chipTextColor
@@ -548,12 +549,43 @@ fun SpoKeyDatesAndScheduleSection(
         border = androidx.compose.foundation.BorderStroke(1.dp, LightCardBorder)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            Text(
-                text = "🗓️ 關鍵時程表與申購時鐘",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimaryDark
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "🗓️ 關鍵時程表與申購時鐘",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimaryDark
+                )
+                val stage = record.getStage()
+                val badgeBg = when (stage) {
+                    SpoStage.OPEN -> StatusGreen.copy(alpha = 0.15f)
+                    SpoStage.UPCOMING -> StatusAmber.copy(alpha = 0.15f)
+                    SpoStage.BALLOTING -> Color(0xFF1565C0).copy(alpha = 0.15f)
+                    SpoStage.CLOSED -> Color.LightGray.copy(alpha = 0.3f)
+                }
+                val badgeColor = when (stage) {
+                    SpoStage.OPEN -> StatusGreen
+                    SpoStage.UPCOMING -> StatusAmber
+                    SpoStage.BALLOTING -> Color(0xFF1565C0)
+                    SpoStage.CLOSED -> TextSecondaryMuted
+                }
+                Box(
+                    modifier = Modifier
+                        .background(badgeBg, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = record.getStatusBadge(),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = badgeColor
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(10.dp))
 
             Row(

@@ -51,6 +51,16 @@ fun DecisionBanner(
     val statusType = record.statusType
 
     val (bannerBg, pillBg, statusBadgeTitle, statusSubtitle) = when (statusType) {
+        IpoStatusType.PENDING_AUCTION -> {
+            val minBidStr = record.minBidPrice?.let { "${TickSizeAligner.formatPrice(it)} 元" } ?: "已公告"
+            val subPriceStr = if (record.subscriptionPrice > 0) "${TickSizeAligner.formatPrice(record.subscriptionPrice)} 元" else "未訂出"
+            listOf(
+                Color(0xFF0F766E), // 翡翠深青綠
+                Color(0xFF115E59),
+                "📢 競拍進行中 (未開標)",
+                "底標價 $minBidStr • 暫定承銷價 $subPriceStr。將於 ${record.auctionDate} 開標揭曉法人得標溢價！"
+            )
+        }
         IpoStatusType.GOLDEN -> {
             listOf(
                 BannerGoldenGreen,
@@ -159,7 +169,7 @@ fun DecisionBanner(
                 ) {
                     Column {
                         Text(
-                            text = "預期交易廊道 (支撐 ~ 壓力)",
+                            text = if (!record.isAuctionCompleted) "參考定錨區間 (底標價 ~ 暫定承銷價)" else "預期交易廊道 (支撐 ~ 壓力)",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
                             color = Color.White.copy(alpha = 0.85f)

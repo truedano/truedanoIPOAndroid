@@ -69,4 +69,41 @@ class TwseSubscriptionParserTest {
         val expiredJingXin = records.find { it.stockCode == "6533" }
         assertNull("已過抽籤日的晶心科應被嚴格過濾排除", expiredJingXin)
     }
+
+    @Test
+    fun testParseTwsePublicSubscriptionForm_FallbackToTentativePriceWhenUndecided() {
+        val sampleFields = listOf(
+            "序號", "抽籤日期", "證券名稱", "證券代號", "發行市場",
+            "申購開始日", "申購結束日", "承銷股數", "實際承銷股數",
+            "承銷價(元)", "實際承銷價(元)", "撥券日期(上市、上櫃日期)",
+            "主辦券商", "申購股數", "總承銷金額(元)", "總合格件",
+            "中籤率(%)", "取消公開申購抽籤"
+        )
+
+        // 模擬「實際承銷價(元)」為「未訂出」，但「承銷價(元)」為 252.0 的增資案件
+        val sampleData = listOf(
+            listOf("1", "115/11/10", "騏億鑫", "7848", "上市增資", "115/11/04", "115/11/06", "865,000", "865,000", "252", "未訂出", "115/11/16", "永豐金", "1,000", "未訂出", "0", "0", "")
+        )
+
+        val response = TwseSubscriptionResponse(
+            stat = "OK",
+            fields = sampleFields,
+            data = sampleData
+        )
+
+        val today = LocalDate.of(2026, 11, 1)
+
+        val records = TwseSubscriptionParser.parseResponse(
+            response = response,
+            filterExpiredLotteries = true,
+            today = today
+        )
+
+        assertEquals(1, records.size)
+        val record = records.first()
+        assertEquals("7848", record.stockCode)
+        // 應成功回退並抓取暫定承銷價 252.0 元
+        assertEquals(252.0, record.subscriptionPrice, 0.001)
+        org.junit.Assert.assertTrue(record.note.contains("暫定承銷價 252.0 元"))
+    }
 }

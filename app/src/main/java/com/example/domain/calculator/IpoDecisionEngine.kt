@@ -22,20 +22,34 @@ object IpoDecisionEngine {
         lots: Int = 1,
         feeDiscount: Double = 1.0
     ): IpoDecisionResult {
+        val isCompleted = record.isAuctionCompleted
+
         // Step 1: 檢視市場熱度
-        val heatLevel = MarketHeatLevel.fromRatio(record.bidRatio)
+        val heatLevel = MarketHeatLevel.fromRatio(record.bidRatio, isCompleted = isCompleted)
 
         // Step 2: 比對安全邊際
-        val safetyMarginStatus = SafetyMarginStatus.fromMargin(record.safetyMargin)
+        val safetyMarginStatus = SafetyMarginStatus.fromMargin(record.safetyMargin, isCompleted = isCompleted)
 
         // Step 3: 定錨真實期待值廊道 (強制對齊 6 檔 Tick Size)
-        val rawSupport = record.minWinningPrice
+        val rawSupport = if (isCompleted) {
+            record.minWinningPrice
+        } else {
+            record.minBidPrice ?: record.subscriptionPrice
+        }
         val alignedSupport = TickSizeAligner.alignDown(rawSupport)
 
-        val rawPivot = record.avgWeightedPrice
+        val rawPivot = if (isCompleted) {
+            record.avgWeightedPrice
+        } else {
+            record.subscriptionPrice
+        }
         val alignedPivot = TickSizeAligner.alignNearest(rawPivot)
 
-        val rawResistance = record.maxWinningPrice ?: (record.avgWeightedPrice * 1.25)
+        val rawResistance = if (isCompleted) {
+            record.maxWinningPrice ?: (record.avgWeightedPrice * 1.25)
+        } else {
+            record.emergingMarketPrice ?: (record.subscriptionPrice * 1.25)
+        }
         val alignedResistance = TickSizeAligner.alignUp(rawResistance)
 
         // 興櫃泡沫檢驗：若興櫃價格 > 最高得標價，標記為散戶泡沫溢價警訊
@@ -65,19 +79,25 @@ object IpoDecisionEngine {
         val isMarginGolden = record.safetyMargin > 0.0
         val isGolden = isRatioGolden && isMarginGolden
 
-        val score = calculateScore(record.bidRatio, record.safetyMargin, isEmergingBubble)
-        val (summary, rationale) = generateRationale(
-            isGolden,
-            isRatioGolden,
-            isMarginGolden,
-            record.bidRatio,
-            record.safetyMargin,
-            isEmergingBubble
-        )
+        val (summary, rationale) = if (!isCompleted) {
+            Pair(
+                "📢 競價拍賣進行中（尚未開標）",
+                "目前標案處於投標或待開標階段（底標價 ${record.minBidPrice ?: 0.0} 元，暫定公開承銷價 ${record.subscriptionPrice} 元）。預計於 ${record.auctionDate} 開標揭曉法人加權得標均價與抽籤安全邊際！"
+            )
+        } else {
+            generateRationale(
+                isGolden,
+                isRatioGolden,
+                isMarginGolden,
+                record.bidRatio,
+                record.safetyMargin,
+                isEmergingBubble
+            )
+        }
 
         val goldenFormula = GoldenFormulaEvaluation(
-            isGolden = isGolden,
-            score = score,
+            isGolden = if (isCompleted) isGolden else false,
+            score = if (isCompleted) calculateScore(record.bidRatio, record.safetyMargin, isEmergingBubble) else 60,
             summary = summary,
             detailRationale = rationale
         )

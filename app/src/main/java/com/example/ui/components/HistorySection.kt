@@ -197,6 +197,7 @@ private fun HistoryRecordItemCard(
 ) {
     val statusType = record.statusType
     val (statusLabel, statusColor, statusBg) = when (statusType) {
+        IpoStatusType.PENDING_AUCTION -> Triple("📢 競拍中", Color(0xFF0F766E), Color(0xFFCCFBF1))
         IpoStatusType.GOLDEN -> Triple("🏆 黃金蜜月", StatusGreen, Color(0xFFECFDF5))
         IpoStatusType.SAFE -> Triple("🛡️ 常態穩健", Color(0xFF2563EB), Color(0xFFEFF6FF))
         IpoStatusType.CRITICAL_DANGER -> Triple("⚠️ 高危倒掛", StatusRed, Color(0xFFFEF2F2))

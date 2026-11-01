@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.domain.calculator.SpoDecisionEngine
 import com.example.domain.model.SpoDecisionResult
 import com.example.domain.model.SpoLotteryRecord
+import com.example.domain.model.SpoStage
 import com.example.domain.repository.SpoLotteryRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,10 +26,23 @@ data class SpoUiState(
     val isSyncing: Boolean = false
 ) {
     /**
-     * 嚴格只回傳「尚未過抽籤日（抽籤日 >= 今天）」的標案
+     * 針對「輔助投資人抽籤決策」排序與過濾：
+     * 1. 排除已過抽籤日者 (today > lotteryDate)
+     * 2. 排序依序為：開放申購中 (OPEN) -> 即將開放 (UPCOMING) -> 待抽籤開獎 (BALLOTING)
      */
     val displayRecords: List<SpoLotteryRecord>
-        get() = allRecords.filter { it.isLotteryActive() }
+        get() = allRecords
+            .filter { it.isLotteryActive() }
+            .sortedWith(
+                compareBy<SpoLotteryRecord> {
+                    when (it.getStage()) {
+                        SpoStage.OPEN -> 0
+                        SpoStage.UPCOMING -> 1
+                        SpoStage.BALLOTING -> 2
+                        SpoStage.CLOSED -> 3
+                    }
+                }.thenBy { it.endDate }
+            )
 }
 
 class SpoDecisionViewModel(
@@ -46,7 +60,18 @@ class SpoDecisionViewModel(
     private fun observeLocalData() {
         viewModelScope.launch {
             repository.getAllRecords().collect { records ->
-                val activeList = records.filter { it.isLotteryActive() }
+                val activeList = records
+                    .filter { it.isLotteryActive() }
+                    .sortedWith(
+                        compareBy<SpoLotteryRecord> {
+                            when (it.getStage()) {
+                                SpoStage.OPEN -> 0
+                                SpoStage.UPCOMING -> 1
+                                SpoStage.BALLOTING -> 2
+                                SpoStage.CLOSED -> 3
+                            }
+                        }.thenBy { it.endDate }
+                    )
                 if (activeList.isNotEmpty()) {
                     val current = _uiState.value.currentRecord
                     val matching = activeList.find { it.stockCode == current?.stockCode } ?: activeList.first()
