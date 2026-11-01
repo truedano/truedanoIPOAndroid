@@ -1,4 +1,6 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.io.FileInputStream
+import java.util.Properties
 
 plugins {
   alias(libs.plugins.android.application)
@@ -9,10 +11,9 @@ plugins {
 }
 
 val versionPropsFile = rootProject.file("version.properties")
-val versionProps = java.util.Properties().apply {
-  if (versionPropsFile.exists()) {
-    load(versionPropsFile.inputStream())
-  }
+val versionProps = Properties()
+if (versionPropsFile.exists()) {
+  FileInputStream(versionPropsFile).use { versionProps.load(it) }
 }
 val versionMajor = (versionProps.getProperty("VERSION_MAJOR") ?: "1").toInt()
 val versionMinor = (versionProps.getProperty("VERSION_MINOR") ?: "0").toInt()
