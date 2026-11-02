@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -163,6 +164,37 @@ fun AppUpdateDialog(
                 dismissButton = {
                     OutlinedButton(onClick = onDismiss) {
                         Text("關閉")
+                    }
+                }
+            )
+        }
+
+        is UpdateUiState.UpToDate -> {
+            AlertDialog(
+                onDismissRequest = onDismiss,
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "已是最新版本",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                title = {
+                    Text(
+                        text = "目前已是最新版本",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(
+                        text = "您目前使用的版本為 v${state.currentVersion}，暫無可用的新更新。",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = onDismiss) {
+                        Text("確定")
                     }
                 }
             )

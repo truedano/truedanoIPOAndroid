@@ -21,6 +21,7 @@ import java.io.FileOutputStream
 sealed interface UpdateUiState {
     object Idle : UpdateUiState
     object Checking : UpdateUiState
+    data class UpToDate(val currentVersion: String) : UpdateUiState
     data class UpdateAvailable(
         val currentVersion: String,
         val latestVersion: String,
@@ -44,7 +45,8 @@ class AppUpdateManager(
 
     suspend fun checkForUpdates(
         owner: String = "truedano",
-        repo: String = "truedanoIPOAndroid"
+        repo: String = "truedanoIPOAndroid",
+        isManual: Boolean = false
     ) = withContext(Dispatchers.IO) {
         _uiState.value = UpdateUiState.Checking
         try {
@@ -65,14 +67,17 @@ class AppUpdateManager(
                         apkSize = apkAsset.size
                     )
                 } else {
-                    _uiState.value = UpdateUiState.Idle
+                    _uiState.value = if (isManual) UpdateUiState.UpToDate(currentVersion) else UpdateUiState.Idle
                 }
+            } else {
+                _uiState.value = if (isManual) UpdateUiState.UpToDate(currentVersion) else UpdateUiState.Idle
+            }
+        } catch (e: Exception) {
+            if (isManual) {
+                _uiState.value = UpdateUiState.Error("檢查更新失敗: ${e.localizedMessage ?: "網路異常"}")
             } else {
                 _uiState.value = UpdateUiState.Idle
             }
-        } catch (e: Exception) {
-            // 背景檢查失敗靜默恢復 Idle，避免影響使用者日常操作體驗
-            _uiState.value = UpdateUiState.Idle
         }
     }
 

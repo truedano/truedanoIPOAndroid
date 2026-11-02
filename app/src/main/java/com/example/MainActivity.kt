@@ -42,7 +42,12 @@ class MainActivity : ComponentActivity() {
 
                 MainTabScreen(
                     ipoViewModel = ipoViewModel,
-                    spoViewModel = spoViewModel
+                    spoViewModel = spoViewModel,
+                    onCheckForUpdate = {
+                        lifecycleScope.launch {
+                            app.container.updateManager.checkForUpdates(isManual = true)
+                        }
+                    }
                 )
 
                 AppUpdateDialog(
