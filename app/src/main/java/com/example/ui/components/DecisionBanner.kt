@@ -57,8 +57,8 @@ fun DecisionBanner(
             listOf(
                 Color(0xFF0F766E), // 翡翠深青綠
                 Color(0xFF115E59),
-                "📢 競拍進行中 (未開標)",
-                "底標價 $minBidStr • 暫定承銷價 $subPriceStr。將於 ${record.auctionDate} 開標揭曉法人得標溢價！"
+                "📢 競拍待開標（抽籤先觀望）",
+                "底標價 $minBidStr • 暫定承銷價 $subPriceStr。建議待 ${record.auctionDate} 開標揭曉法人成本後，再決定是否送出抽籤！"
             )
         }
         IpoStatusType.GOLDEN -> {
@@ -89,6 +89,9 @@ fun DecisionBanner(
 
     val supportStr = TickSizeAligner.formatPrice(result.corridor.alignedSupportPrice)
     val resistanceStr = TickSizeAligner.formatPrice(result.corridor.alignedResistancePrice)
+    val minBidDisplay = record.minBidPrice?.let { "${TickSizeAligner.formatPrice(it)} 元" } ?: "$supportStr 元"
+    val subPriceDisplay = if (record.subscriptionPrice > 0) "${TickSizeAligner.formatPrice(record.subscriptionPrice)} 元" else "未訂出"
+    val corridorDisplay = if (!record.isAuctionCompleted) "$minBidDisplay ~ $subPriceDisplay" else "$supportStr ~ $resistanceStr 元"
 
     Card(
         modifier = modifier
@@ -169,14 +172,14 @@ fun DecisionBanner(
                 ) {
                     Column {
                         Text(
-                            text = if (!record.isAuctionCompleted) "參考定錨區間 (底標價 ~ 暫定承銷價)" else "預期交易廊道 (支撐 ~ 壓力)",
+                            text = if (!record.isAuctionCompleted) "暫定價格錨點 (底標價 ~ 暫定承銷價)" else "預期交易廊道 (支撐 ~ 壓力)",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
                             color = Color.White.copy(alpha = 0.85f)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "$supportStr ~ $resistanceStr 元",
+                            text = corridorDisplay,
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.White,

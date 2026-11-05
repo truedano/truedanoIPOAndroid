@@ -81,8 +81,8 @@ object IpoDecisionEngine {
 
         val (summary, rationale) = if (!isCompleted) {
             Pair(
-                "📢 競價拍賣進行中（尚未開標）",
-                "目前標案處於投標或待開標階段（底標價 ${record.minBidPrice ?: 0.0} 元，暫定公開承銷價 ${record.subscriptionPrice} 元）。預計於 ${record.auctionDate} 開標揭曉法人加權得標均價與抽籤安全邊際！"
+                "📢 競拍待開標（尚未開標 · 抽籤先觀望）",
+                "目前標案處於待開標階段（底標價 ${record.minBidPrice ?: 0.0} 元，暫定公開承銷價 ${record.subscriptionPrice} 元）。建議待 ${record.auctionDate} 開標揭曉法人加權得標均價與抽籤安全邊際後，於抽籤截止日前再決定是否申購！"
             )
         } else {
             generateRationale(

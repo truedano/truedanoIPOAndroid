@@ -76,7 +76,9 @@ fun StructuredStepCards(
             margin = record.safetyMargin,
             marginStatus = result.safetyMarginStatus,
             minPrice = record.minWinningPrice,
-            subPrice = record.subscriptionPrice
+            subPrice = record.subscriptionPrice,
+            minBidPrice = record.minBidPrice,
+            auctionDate = record.auctionDate
         )
 
         // 卡片 3【第三步：法人真實期待值】
@@ -84,7 +86,9 @@ fun StructuredStepCards(
             supportPrice = result.corridor.alignedSupportPrice,
             resistancePrice = result.corridor.alignedResistancePrice,
             emergingPrice = record.emergingMarketPrice,
-            isBubble = result.corridor.isEmergingBubble
+            isBubble = result.corridor.isEmergingBubble,
+            isCompleted = record.isAuctionCompleted,
+            auctionDate = record.auctionDate
         )
     }
 }
@@ -105,7 +109,7 @@ private fun Step1HeatCard(
     }
 
     val explanation = when (heatLevel) {
-        MarketHeatLevel.PENDING -> "標案目前處於投標或待開標階段，待開標日結算揭曉合格投標張數與市場熱度倍數。"
+        MarketHeatLevel.PENDING -> "標案目前處於投標結束待開標階段，待開標日結算揭曉合格投標張數與市場熱度倍數。"
         MarketHeatLevel.HOT -> "資金高度追捧，市場籌碼供不應求。法人大戶投標熱絡，上市首日的蜜月行情非常值得期待！"
         MarketHeatLevel.NEUTRAL -> "投標倍數處於中性常態區間，法人進場意願平穩，上市初期依大盤氛圍尋求價格中樞。"
         MarketHeatLevel.COLD -> "投標動能明顯偏冷，法人參標意願低迷，上市首日買盤缺乏追價意願，需嚴控風險。"
@@ -131,15 +135,19 @@ private fun Step2SafetyMarginCard(
     margin: Double,
     marginStatus: SafetyMarginStatus,
     minPrice: Double,
-    subPrice: Double
+    subPrice: Double,
+    minBidPrice: Double? = null,
+    auctionDate: String = ""
 ) {
     val isPending = marginStatus == SafetyMarginStatus.PENDING
     val isSafe = marginStatus.isSafe
     val statusColor = if (isPending) Color(0xFF0F766E) else if (isSafe) StatusGreen else StatusRed
-    val formattedMargin = if (isPending) "待定價" else "${if (margin > 0) "+" else ""}${String.format("%.2f", margin)} 元"
+    val formattedMargin = if (isPending) "待開標敲定" else "${if (margin > 0) "+" else ""}${String.format("%.2f", margin)} 元"
 
     val explanation = if (isPending) {
-        "競價拍賣進行中，底標價為 ${TickSizeAligner.formatPrice(minPrice)} 元，暫定公開申購價為 ${TickSizeAligner.formatPrice(subPrice)} 元。開標後將自動為您比對機構法人進場成本與抽籤價差。"
+        val minBidFormatted = TickSizeAligner.formatPrice(minBidPrice ?: 0.0)
+        val subPriceFormatted = TickSizeAligner.formatPrice(subPrice)
+        "競價拍賣尚未開標，底標價為 $minBidFormatted 元，暫定公開承銷價為 $subPriceFormatted 元。待 $auctionDate 開標揭曉最低得標價後，若大於承銷價即具備安全邊際。"
     } else if (isSafe) {
         "所有競拍得標法人的成本（最低 ${TickSizeAligner.formatPrice(minPrice)} 元）都高於你的抽籤價（${TickSizeAligner.formatPrice(subPrice)} 元）。抽籤者具備極佳的持股安全邊際，首日賺取價差機率極高。"
     } else {
@@ -156,7 +164,7 @@ private fun Step2SafetyMarginCard(
         statusText = if (isPending) "待開標定錨 (尚未開標)" else if (isSafe) "安全訊號 (具安全邊際)" else "極度危險倒掛 (無安全邊際)",
         statusColor = statusColor,
         explanation = explanation,
-        footerText = "抽籤申購價: ${TickSizeAligner.formatPrice(subPrice)} 元 | 最低得標價: ${TickSizeAligner.formatPrice(minPrice)} 元",
+        footerText = if (isPending) "暫定申購價: ${TickSizeAligner.formatPrice(subPrice)} 元 | 競拍底標價: ${TickSizeAligner.formatPrice(minBidPrice ?: 0.0)} 元" else "抽籤申購價: ${TickSizeAligner.formatPrice(subPrice)} 元 | 最低得標價: ${TickSizeAligner.formatPrice(minPrice)} 元",
         testTag = "step_2_margin_card"
     )
 }
@@ -166,15 +174,23 @@ private fun Step3PriceCorridorCard(
     supportPrice: Double,
     resistancePrice: Double,
     emergingPrice: Double?,
-    isBubble: Boolean
+    isBubble: Boolean,
+    isCompleted: Boolean = true,
+    auctionDate: String = ""
 ) {
     val supportStr = TickSizeAligner.formatPrice(supportPrice)
     val resistanceStr = TickSizeAligner.formatPrice(resistancePrice)
-    val mainInterval = "$supportStr ~ $resistanceStr 元"
+    val mainInterval = if (!isCompleted) "待開標定錨" else "$supportStr ~ $resistanceStr 元"
 
-    val explanation = "最高得標價 ($resistanceStr 元) 為法人短期出價接受度之極限，股價將在最低得標價 ($supportStr 元) 與最高得標價之間尋求平衡。"
+    val explanation = if (!isCompleted) {
+        "標案尚未開標，目前僅能以底標價 ($supportStr 元) 與暫定承銷價為參考。待 $auctionDate 開標揭曉真實得標價格後，系統將自動以「最低得標價 ~ 最高得標價」為您計算多空防守廊道。"
+    } else {
+        "最高得標價 ($resistanceStr 元) 為法人短期出價接受度之極限，股價將在最低得標價 ($supportStr 元) 與最高得標價之間尋求平衡。"
+    }
 
-    val footer = if (emergingPrice != null) {
+    val footer = if (!isCompleted) {
+        "多空廊道: 待 $auctionDate 開標後敲定"
+    } else if (emergingPrice != null) {
         val emStr = TickSizeAligner.formatPrice(emergingPrice)
         if (isBubble) "興櫃參考均價: $emStr 元 (散戶泡沫溢價警訊！)"
         else "興櫃參考均價: $emStr 元 (未脫鉤)"
@@ -189,7 +205,7 @@ private fun Step3PriceCorridorCard(
         subtitle = "真實價格發現區間",
         mainValue = mainInterval,
         mainValueColor = TextPrimaryDark,
-        statusText = "下檔支撐 → 上檔天花板",
+        statusText = if (!isCompleted) "法人得標區間待開標形成" else "下檔支撐 → 上檔天花板",
         statusColor = Step3PurpleText,
         explanation = explanation,
         footerText = footer,

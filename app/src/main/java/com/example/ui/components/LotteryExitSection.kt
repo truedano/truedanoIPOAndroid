@@ -103,8 +103,8 @@ private fun TopScheduleCard(
     val statusType = record.statusType
     val (boardTitle, boardSubtitle, titleColor) = when (statusType) {
         IpoStatusType.PENDING_AUCTION -> Triple(
-            "【📢 競拍進行中！等待開標局】",
-            "標案目前處於投標或待開標階段，預備抽籤本金，開標後將自動為您敲定法人得標安全邊際！",
+            "【⏳ 待開標！抽籤決策先觀望】",
+            "標案預計於 ${record.auctionDate} 開標。建議待開標揭曉法人得標成本與安全邊際後，於抽籤截止日前再送單！",
             Color(0xFF0F766E)
         )
         IpoStatusType.GOLDEN -> Triple(

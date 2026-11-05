@@ -115,7 +115,7 @@ data class IpoAuctionRecord(
                         return "🔥 投標中"
                     }
                 }
-                return if (parsedAuction != null) "${parsedAuction.monthValue}/${parsedAuction.dayOfMonth} 開標" else "$auctionDate 開標"
+                return if (parsedAuction != null) "${parsedAuction.monthValue}/${parsedAuction.dayOfMonth} 開標後再抽" else "$auctionDate 開標後再抽"
             }
             if (lotteryDate != null && lotteryDate.isNotBlank()) {
                 val parsedLottery = parseDateSafe(lotteryDate)
